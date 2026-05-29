@@ -37,5 +37,15 @@ public class EmailEventDto {
         private String summary;
         private List<String> suggestedReplies;
     }
+
+    // Gửi notification cho UI (via WebSocket)
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class EmailNotification {
+        private Long emailId;
+        private String subject;
+        private String label;
+        private String summary;
+        private LocalDateTime processedAt;
+}
 }
 

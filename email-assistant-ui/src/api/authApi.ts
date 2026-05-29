@@ -18,7 +18,9 @@ export type AuthResponse = {
     }
 }
 
-export const register = (data: AuthResponse) => api.post('/auth/register', data)
-export const login    = (data: AuthResponse) => api.post('/auth/login', data)
+export type LoginData = Pick<UserData, 'email' | 'password'>
+
+export const register = (data: UserData) => api.post('/auth/register', data)
+export const login    = (data: LoginData) => api.post('/auth/login', data)
 export const logout   = ()     => api.post('/auth/logout')
 export const getMe    = ()     => api.get('/auth/me')
