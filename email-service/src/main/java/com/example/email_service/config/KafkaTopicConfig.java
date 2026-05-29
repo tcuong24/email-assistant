@@ -18,7 +18,7 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic emailReceivedTopic() {
         return TopicBuilder.name(emailReceivedTopic)
-                .partitions(3)
+                .partitions(1)
                 .replicas(1)
                 .build();
     }
@@ -26,7 +26,7 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic aiResultTopic() {
         return TopicBuilder.name(aiResultTopic)
-                .partitions(3)
+                .partitions(1)
                 .replicas(1)
                 .build();
     }
