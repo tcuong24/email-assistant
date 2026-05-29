@@ -80,7 +80,10 @@ public class AuthService {
 
         User user = refreshToken.getUser();
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        String newAccessToken = jwtService.generateToken(userDetails);
+        
+        java.util.Map<String, Object> extraClaims = new java.util.HashMap<>();
+        extraClaims.put("userId", user.getId());
+        String newAccessToken = jwtService.generateToken(extraClaims, userDetails);
 
         return TokenResponse.builder()
                 .accessToken(newAccessToken)
@@ -101,7 +104,10 @@ public class AuthService {
     // ── Helper ────────────────────────────────────────────────────
     private TokenResponse buildTokenResponse(User user) {
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        String accessToken = jwtService.generateToken(userDetails);
+        
+        java.util.Map<String, Object> extraClaims = new java.util.HashMap<>();
+        extraClaims.put("userId", user.getId());
+        String accessToken = jwtService.generateToken(extraClaims, userDetails);
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
         return TokenResponse.builder()

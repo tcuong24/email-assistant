@@ -22,9 +22,11 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
 
+    @Transactional
     public RefreshToken createRefreshToken(User user) {
         // Xoá token cũ nếu có
         refreshTokenRepository.deleteByUser(user);
+        refreshTokenRepository.flush();
 
         RefreshToken token = RefreshToken.builder()
                 .user(user)

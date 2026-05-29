@@ -4,3 +4,79 @@ server:
 spring:
   application:
     name: gateway-service
+  cloud:
+    gateway:
+      # Tắt discovery client nếu không dùng Eureka
+      discovery:
+        locator:
+          enabled: false
+
+      routes:
+        # ── user-service ──────────────────────────────────────────
+        - id: user-service-auth
+          uri: http://user-service:8082
+          predicates:
+            - Path=/api/v1/auth/**
+          # filters:
+          #   - name: RequestRateLimiter    # rate limit 20 req/s
+          #     args:
+          #       redis-rate-limiter.replenishRate: 20
+          #       redis-rate-limiter.burstCapacity: 40
+
+        - id: user-service-users
+          uri: http://user-service:8082
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - AuthFilter    # kiểm tra JWT
+
+        # ── email-service ────────────────────────────────────────
+        - id: email-service
+          uri: http://email-service:8084
+          predicates:
+            - Path=/api/v1/emails/**
+          filters:
+            - AuthFilter
+
+        # ── analytics-service ────────────────────────────────────
+        - id: analytics-service
+          uri: http://analytics-service:8083
+          predicates:
+            - Path=/api/v1/analytics/**
+          filters:
+            - AuthFilter
+
+        # ── ai-service health ────────────────────────────────────
+        - id: ai-service-health
+          uri: http://ai-service:8085
+          predicates:
+            - Path=/api/v1/ai/health
+          # public — không cần JWT
+
+      # CORS cho React frontend
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+  # Các path không cần JWT (phân tách bằng dấu phẩy để @Value tự động chuyển sang List)
+  public-paths: /api/v1/auth/register,/api/v1/auth/login,/api/v1/auth/refresh,/actuator/health,/api/v1/ai/health
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

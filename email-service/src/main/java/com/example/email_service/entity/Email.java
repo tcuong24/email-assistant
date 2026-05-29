@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -12,6 +13,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -24,8 +26,10 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(name = "emails")
+
 public class Email {
-      @Id
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -40,7 +44,7 @@ public class Email {
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    private AiLabel label = AiLabel.PENDING;
+    private EmailLabel  label = EmailLabel.PENDING;
 
     @Column(columnDefinition = "TEXT")
     private String summary;
@@ -58,7 +62,7 @@ public class Email {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    public enum AiLabel {
-        PENDING, SPAM, IMPORTANT, NORMAL
+    public enum EmailLabel  {
+        PENDING,SPAM,IMPORTANT,NORMAL,WORK,PERSONAL
     }
 }

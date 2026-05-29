@@ -10,6 +10,6 @@ import com.example.email_service.entity.Email;
 @Repository
 public interface EmailRepository extends JpaRepository<Email, Long> {
     List<Email> findByUserIdOrderByReceivedAtDesc(Long userId);
-    List<Email> findByUserIdAndLabel(Long userId, Email.AiLabel label);
-    long countByUserIdAndLabel(Long userId, Email.AiLabel label);
+    List<Email> findByUserIdAndLabel(Long userId, Email.EmailLabel label);
+    long countByUserIdAndLabel(Long userId, Email.EmailLabel label);
 }

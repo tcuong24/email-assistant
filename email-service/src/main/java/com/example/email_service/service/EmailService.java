@@ -35,7 +35,7 @@ public class EmailService {
                 .subject(request.getSubject())
                 .body(request.getBody())
                 .userId(userId)
-                .label(Email.AiLabel.PENDING)
+                .label(Email.EmailLabel.PENDING)
                 .build();
 
         email = emailRepository.save(email);
@@ -47,7 +47,7 @@ public class EmailService {
                 .subject(email.getSubject())
                 .body(email.getBody())
                 .userId(email.getUserId())
-                .receivedAt(email.getReceivedAt())
+                .receivedAt(email.getReceivedAt() != null ? email.getReceivedAt().toString() : null)
                 .build();
 
         kafkaTemplate.send(emailReceivedTopic, 
@@ -61,7 +61,7 @@ public class EmailService {
     @Transactional
     public void updateAiResult(AiResultEvent event) {
         emailRepository.findById(event.getEmailId()).ifPresent(email -> {
-            email.setLabel(Email.AiLabel.valueOf(event.getLabel()));
+            email.setLabel(Email.EmailLabel.valueOf(event.getLabel()));
             email.setSummary(event.getSummary());
             email.setSuggestedReplies(
                 String.join("||", event.getSuggestedReplies())

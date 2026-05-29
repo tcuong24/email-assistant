@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ── CƠ SỞ DỮ LIỆU: PostgreSQL ──────────────────────────────────────
   postgres:
@@ -56,8 +54,8 @@ services:
       context: ./user-service
       dockerfile: Dockerfile
     container_name: user-service
-    ports:
-      - "8082:8082"
+    expose:
+      - "8082"
     environment:
       - DB_HOST=postgres
       - DB_USER=postgres
@@ -79,8 +77,8 @@ services:
       context: ./analytics-service
       dockerfile: Dockerfile
     container_name: analytics-service
-    ports:
-      - "8083:8083"
+    expose:
+      - "8083"
     environment:
       - DB_HOST=postgres
       - DB_USER=postgres
@@ -101,8 +99,8 @@ services:
       context: ./email-service
       dockerfile: Dockerfile
     container_name: email-service
-    ports:
-      - "8084:8084"
+    expose:
+      - "8084"
     environment:
       - SERVER_PORT=8084
       - DB_HOST=postgres
@@ -128,10 +126,41 @@ services:
       - "8080:8080"
     environment:
       - SERVER_PORT=8080
+      - JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
     depends_on:
       - user-service
       - analytics-service
       - email-service
+    networks:
+      - email-network
+
+  frontend:
+    build:
+      context: ./email-assistant-ui
+      dockerfile: Dockerfile
+    container_name: ea-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway-service
+    networks:
+      - email-network
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: ea-ai-service
+    expose:
+      - "8085"
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_EMAIL_RECEIVED: email.received
+      KAFKA_TOPIC_AI_RESULT: ai.result
+    depends_on:
+      kafka:
+        condition: service_healthy
     networks:
       - email-network
 

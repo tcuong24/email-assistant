@@ -26,7 +26,7 @@ public class EmailEventDto {
         private String subject;
         private String body;
         private Long userId;
-        private LocalDateTime receivedAt;
+        private String receivedAt;
     }
 
     // Nhận từ topic ai.result

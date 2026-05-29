@@ -17,6 +17,7 @@
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+
 Thumbs.db
 
 # ── CẤU HÌNH IDE ────────────────────────────────────────────────────────
@@ -69,3 +70,20 @@ yarn-error.log*
 # Crash dumps
 drwatson.log
 portables.txt
+
+# ── PYTHON ────────────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ── NODE/FRONTEND ──────────────────────────────────────────────────────────
+node_modules/
+dist/
+.next/
+.nuxt/
+.out/
