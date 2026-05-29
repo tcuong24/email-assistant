@@ -43,7 +43,7 @@ def start_consumer():
             print(f"[Consumer] Đã kết nối Kafka, lắng nghe topic: {EMAIL_TOPIC}")
             break
         except NoBrokersAvailable:
-            print("[Consumer] Kafka chưa sẵn sàng, thử lại sau 5s...")
+            print(f"[Consumer] Kafka ({KAFKA_SERVERS}) chưa sẵn sàng hoặc sai thông tin bảo mật, thử lại sau 5s...")
             time.sleep(5)
 
     for message in consumer:
