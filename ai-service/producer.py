@@ -15,6 +15,14 @@ def get_producer():
 
         username = os.getenv("KAFKA_USERNAME")
         password = os.getenv("KAFKA_PASSWORD")
+        api_version_env = os.getenv("KAFKA_API_VERSION")
+        if api_version_env:
+            kafka_kwargs["api_version"] = tuple(map(int, api_version_env.split(".")))
+        elif username and password:
+            # Bắt buộc set api_version khi dùng SASL_SSL (Aiven) để tránh kafka-python tự động probe
+            # dẫn đến lỗi NoBrokersAvailable do Aiven block các request chưa xác thực.
+            kafka_kwargs["api_version"] = (2, 5, 0)
+
         if username and password:
             import ssl
             context = ssl.create_default_context()
