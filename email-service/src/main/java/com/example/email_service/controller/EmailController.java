@@ -49,4 +49,104 @@ public class EmailController {
             @RequestHeader("X-User-Id") Long userId) {
         return ResponseEntity.ok(emailService.getEmailById(id, userId));
     }
+
+    // ── NYLAS INTEGRATION ──────────────────────────────────────────────
+
+    @org.springframework.beans.factory.annotation.Value("${NYLAS_CLIENT_ID:}")
+    private String nylasClientId;
+
+    @org.springframework.beans.factory.annotation.Value("${NYLAS_API_KEY:}")
+    private String nylasApiKey;
+
+    // Đổi code lấy grant_id từ Nylas sau khi OAuth thành công
+    @PostMapping("/nylas/connect")
+    public ResponseEntity<?> connectNylas(
+            @RequestBody java.util.Map<String, String> body,
+            @RequestHeader("X-User-Id") Long userId) {
+        
+        String code = body.get("code");
+        if (code == null || code.isEmpty()) {
+            return ResponseEntity.badRequest().body("Mã code không hợp lệ");
+        }
+
+        try {
+            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(nylasApiKey);
+
+            java.util.Map<String, String> requestBody = new java.util.HashMap<>();
+            requestBody.put("client_id", nylasClientId);
+            requestBody.put("code", code);
+            requestBody.put("redirect_uri", "https://emailflow-ai.netlify.app/oauth/callback");
+            requestBody.put("grant_type", "authorization_code");
+
+            org.springframework.http.HttpEntity<java.util.Map<String, String>> entity = 
+                    new org.springframework.http.HttpEntity<>(requestBody, headers);
+            
+            org.springframework.http.ResponseEntity<java.util.Map> response = restTemplate.postForEntity(
+                "https://api.us.nylas.com/v3/connect/token", 
+                entity, 
+                java.util.Map.class
+            );
+
+            if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
+                String grantId = (String) response.getBody().get("grant_id");
+                if (grantId != null) {
+                    emailService.saveNylasConnection(userId, grantId);
+                    return ResponseEntity.ok(java.util.Map.of("status", "success", "grantId", grantId));
+                }
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Lỗi trao đổi token Nylas: " + e.getMessage());
+        }
+        return ResponseEntity.badRequest().body("Kết nối hòm thư Nylas thất bại");
+    }
+
+    // Xác thực Webhook của Nylas (Bắt buộc phải trả về challenge)
+    @GetMapping("/nylas-webhook")
+    public ResponseEntity<String> verifyNylasWebhook(
+            @org.springframework.web.bind.annotation.RequestParam("challenge") String challenge) {
+        return ResponseEntity.ok(challenge);
+    }
+
+    // Nhận email thật thời gian thực từ Nylas Webhook
+    @PostMapping("/nylas-webhook")
+    public ResponseEntity<?> handleNylasWebhook(@RequestBody java.util.Map<String, Object> payload) {
+        try {
+            String type = (String) payload.get("type");
+            if ("message.created".equals(type)) {
+                java.util.Map<String, Object> data = (java.util.Map<String, Object>) payload.get("data");
+                if (data != null) {
+                    String grantId = (String) data.get("grant_id");
+                    java.util.Map<String, Object> object = (java.util.Map<String, Object>) data.get("object");
+                    if (grantId != null && object != null) {
+                        String subject = (String) object.get("subject");
+                        String body = (String) object.get("body");
+                        
+                        java.util.List<java.util.Map<String, Object>> fromList = 
+                                (java.util.List<java.util.Map<String, Object>>) object.get("from");
+                        String fromAddress = "";
+                        if (fromList != null && !fromList.isEmpty()) {
+                            fromAddress = (String) fromList.get(0).get("email");
+                        }
+
+                        Long userId = emailService.findUserIdByGrantId(grantId);
+                        if (userId != null) {
+                            ReceiveEmailRequest request = new ReceiveEmailRequest();
+                            request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
+                            request.setBody(body != null ? body : "");
+                            request.setFromAddress(fromAddress != null ? fromAddress : "");
+
+                            emailService.receiveEmail(request, userId);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Không làm gì, trả về 200 để tránh Nylas block webhook
+        }
+        return ResponseEntity.ok().build();
+    }
 }

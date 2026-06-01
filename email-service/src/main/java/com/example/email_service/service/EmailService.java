@@ -10,7 +10,9 @@ import com.example.email_service.dto.EmailEventDto.AiResultEvent;
 import com.example.email_service.dto.EmailEventDto.EmailReceivedEvent;
 import com.example.email_service.dto.EmailEventDto.ReceiveEmailRequest;
 import com.example.email_service.entity.Email;
+import com.example.email_service.entity.NylasConnection;
 import com.example.email_service.repository.EmailRepository;
+import com.example.email_service.repository.NylasConnectionRepository;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +24,24 @@ import lombok.extern.slf4j.Slf4j;
 public class EmailService {
 
     private final EmailRepository emailRepository;
+    private final NylasConnectionRepository nylasConnectionRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Transactional
+    public void saveNylasConnection(Long userId, String grantId) {
+        NylasConnection connection = NylasConnection.builder()
+                .userId(userId)
+                .grantId(grantId)
+                .build();
+        nylasConnectionRepository.save(connection);
+        log.info("Saved Nylas connection mapping: userId={}, grantId={}", userId, grantId);
+    }
+
+    public Long findUserIdByGrantId(String grantId) {
+        return nylasConnectionRepository.findByGrantId(grantId)
+                .map(NylasConnection::getUserId)
+                .orElse(null);
+    }
 
     @Value("${app.kafka.topics.email-received}")
     private String emailReceivedTopic;

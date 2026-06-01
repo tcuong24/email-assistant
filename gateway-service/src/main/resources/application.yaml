@@ -74,7 +74,7 @@ app:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
 
   # Các path không cần JWT (phân tách bằng dấu phẩy để @Value tự động chuyển sang List)
-  public-paths: /api/v1/auth/register,/api/v1/auth/login,/api/v1/auth/refresh,/actuator/health,/api/v1/ai/health
+  public-paths: /api/v1/auth/register,/api/v1/auth/login,/api/v1/auth/refresh,/actuator/health,/api/v1/ai/health,/api/v1/emails/nylas-webhook
 
 management:
   endpoints:

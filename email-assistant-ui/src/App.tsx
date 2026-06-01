@@ -3,10 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './store/authStore'
 import ProtectedRoute from './components/ProtectedRoute'
 
-import InboxPage      from './pages/InboxPage'
+import InboxPage from './pages/InboxPage'
 import EmailDetailPage from './pages/EmailDetailPage'
-import DashboardPage  from './pages/DashboardPage'
+import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginForm'
+import OAuthCallback from './components/OAuthNylas'
 
 const queryClient = new QueryClient()
 
@@ -18,6 +19,7 @@ export default function App() {
           <Routes>
             <Route path="/login"    element={<LoginPage />} />
             {/* <Route path="/register" element={<RegisterPage />} /> */}
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/inbox" element={
               <ProtectedRoute><InboxPage /></ProtectedRoute>
             }/>

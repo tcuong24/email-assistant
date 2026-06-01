@@ -1,91 +1,168 @@
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useNavigate } from 'react-router-dom'
-import { getEmail } from '../api/emailApi'
-import Navbar from '../components/Navbar'
-import LabelBadge from '../components/LabelBadge'
+import { useNavigate } from 'react-router-dom'
+import { getEmails } from '../api/emailApi'
+import Sidebar from '../components/Sidebar'
+import {
+  Mail,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  BarChart3,
+} from 'lucide-react'
 
-
-export default function EmailDetailPage() {
-  const { id } = useParams()
+export default function DashboardPage() {
   const navigate = useNavigate()
 
-  const { data: email, isLoading } = useQuery({
-    queryKey: ['email', id],
-    queryFn: () => getEmail(Number(id)).then(r => r.data),
-    enabled: !!id,
+  const { data: emails, isLoading } = useQuery({
+    queryKey: ['emails'],
+    queryFn: () => getEmails().then(r => r.data),
   })
 
+  const stats = {
+    total: emails?.length || 0,
+    unread: emails?.filter(e => e.status !== 'READ').length || 0,
+    important: emails?.filter(e => e.label?.toUpperCase() === 'IMPORTANT').length || 0,
+    spam: emails?.filter(e => e.label?.toUpperCase() === 'SPAM').length || 0,
+  }
+
+  const statCards = [
+    {
+      label: 'Tổng email',
+      value: stats.total,
+      icon: Mail,
+      color: '#3B82F6',
+      bg: '#EFF6FF',
+    },
+    {
+      label: 'Chưa đọc',
+      value: stats.unread,
+      icon: Clock,
+      color: '#F59E0B',
+      bg: '#FFFBEB',
+    },
+    {
+      label: 'Quan trọng',
+      value: stats.important,
+      icon: CheckCircle,
+      color: '#10B981',
+      bg: '#ECFDF5',
+    },
+    {
+      label: 'Spam',
+      value: stats.spam,
+      icon: AlertTriangle,
+      color: '#EF4444',
+      bg: '#FEF2F2',
+    },
+  ]
+
   if (isLoading) return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="flex justify-center pt-20 text-gray-400">Đang tải...</div>
+    <div className="h-screen flex" style={{ background: "var(--bg-main)" }}>
+      <Sidebar />
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-full border-4 border-t-transparent animate-spin"
+            style={{ borderColor: "var(--accent-primary)", borderTopColor: "transparent" }}
+          />
+          <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+            Đang tải...
+          </span>
+        </div>
+      </div>
     </div>
   )
 
-  const replies = email?.suggestedReplies
-    ? email.suggestedReplies.split('||')
-    : []
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-sm text-gray-500 hover:text-gray-700 mb-4 flex items-center gap-1">
-          ← Quay lại
-        </button>
+    <div className="h-screen flex overflow-hidden" style={{ background: "var(--bg-main)" }}>
+      <Sidebar />
 
-        <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto scrollbar-thin" style={{ padding: "var(--space-xl)" }}>
+        <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-lg font-semibold text-gray-800">
-                {email?.subject}
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-1">
+              <BarChart3 className="w-6 h-6" style={{ color: "var(--accent-primary)" }} />
+              <h1
+                className="text-2xl font-bold"
+                style={{ color: "var(--text-primary)", margin: 0, letterSpacing: "-0.02em" }}
+              >
+                Dashboard
               </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Từ: {email?.fromAddress}
-              </p>
             </div>
-            <LabelBadge label={email?.label} />
-          </div>
-
-          {/* Tóm tắt AI */}
-          {email?.summary && (
-            <div className="bg-blue-50 rounded-lg p-4">
-              <p className="text-xs font-medium text-blue-600 mb-1">
-                ✨ AI tóm tắt
-              </p>
-              <p className="text-sm text-blue-800">{email.summary}</p>
-            </div>
-          )}
-
-          {/* Nội dung gốc */}
-          <div>
-            <p className="text-xs text-gray-400 mb-2">Nội dung gốc</p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-              {email?.body}
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Tổng quan về hộp thư của bạn
             </p>
           </div>
 
-          {/* Gợi ý reply */}
-          {replies.length > 0 && (
-            <div>
-              <p className="text-xs text-gray-400 mb-2">
-                💬 Gợi ý trả lời
-              </p>
-              <div className="space-y-2">
-                {replies.map((reply, i) => (
-                  <div key={i}
-                    className="border border-gray-200 rounded-lg px-4 py-2
-                               text-sm text-gray-700 hover:bg-gray-50
-                               cursor-pointer transition-colors">
-                    {reply}
+          {/* Stat Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {statCards.map((stat) => {
+              const Icon = stat.icon
+              return (
+                <div
+                  key={stat.label}
+                  className="rounded-xl transition-all duration-200 hover:shadow-md"
+                  style={{
+                    padding: "20px",
+                    background: "var(--bg-panel)",
+                    border: "1px solid var(--border-color)",
+                    boxShadow: "var(--shadow-card)",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center"
+                      style={{ background: stat.bg }}
+                    >
+                      <Icon className="w-5 h-5" style={{ color: stat.color }} />
+                    </div>
                   </div>
-                ))}
-              </div>
+                  <p
+                    className="text-2xl font-bold"
+                    style={{ color: "var(--text-primary)", margin: 0 }}
+                  >
+                    {stat.value}
+                  </p>
+                  <p className="text-xs font-medium mt-1" style={{ color: "var(--text-secondary)" }}>
+                    {stat.label}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Quick Actions */}
+          <div
+            className="rounded-xl"
+            style={{
+              padding: "24px",
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border-color)",
+              boxShadow: "var(--shadow-card)",
+            }}
+          >
+            <h3
+              className="text-sm font-bold mb-4"
+              style={{ color: "var(--text-primary)", margin: "0 0 16px 0" }}
+            >
+              Hành động nhanh
+            </h3>
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={() => navigate('/inbox')}
+                className="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all duration-200 hover:shadow-sm"
+                style={{
+                  background: "#EFF6FF",
+                  color: "#2563EB",
+                  border: "1px solid #BFDBFE",
+                }}
+              >
+                <Mail className="w-4 h-4" />
+                Đi tới Inbox
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
