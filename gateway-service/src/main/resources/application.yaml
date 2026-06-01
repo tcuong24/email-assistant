@@ -59,6 +59,7 @@ spring:
           '[/**]':
             allowedOrigins:
               - "http://localhost:3000"
+              - "https://emailflow-ai.netlify.app"
             allowedMethods:
               - GET
               - POST
