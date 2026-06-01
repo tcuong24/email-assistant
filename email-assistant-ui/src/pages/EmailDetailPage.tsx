@@ -11,7 +11,7 @@ export default function EmailDetailPage() {
 
   const { data: email, isLoading } = useQuery({
     queryKey: ['email', id],
-    queryFn: () => getEmail(id).then(r => r.data),
+    queryFn: () => getEmail(Number(id)).then(r => r.data),
   })
 
   if (isLoading) return (
