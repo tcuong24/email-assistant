@@ -58,6 +58,9 @@ public class EmailController {
     @org.springframework.beans.factory.annotation.Value("${NYLAS_API_KEY:}")
     private String nylasApiKey;
 
+    @org.springframework.beans.factory.annotation.Value("${NYLAS_API_URL:https://api.us.nylas.com}")
+    private String nylasApiUrl;
+
     // Đổi code lấy grant_id từ Nylas sau khi OAuth thành công
     @PostMapping("/nylas/connect")
     public ResponseEntity<?> connectNylas(
@@ -85,7 +88,7 @@ public class EmailController {
                     new org.springframework.http.HttpEntity<>(requestBody, headers);
             
             org.springframework.http.ResponseEntity<java.util.Map> response = restTemplate.postForEntity(
-                "https://api.us.nylas.com/v3/connect/token", 
+                nylasApiUrl + "/v3/connect/token", 
                 entity, 
                 java.util.Map.class
             );

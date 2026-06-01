@@ -15,14 +15,15 @@ export default function Navbar() {
   const handleConnectEmail = () => {
     const clientId = import.meta.env.VITE_NYLAS_CLIENT_ID || "YOUR_NYLAS_CLIENT_ID";
     const redirectUri = window.location.origin + "/oauth/callback";
-    const nylasAuthUrl = `https://api.us.nylas.com/v3/connect/auth?` + 
+    const nylasApiUrl = import.meta.env.VITE_NYLAS_API_URL || "https://api.us.nylas.com";
+    const authUrl = `${nylasApiUrl}/v3/connect/auth?` + 
       `client_id=${clientId}` +
       `&redirect_uri=${redirectUri}` +
       `&response_type=code` +
       `&provider=google` +
       `&scope=https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly`;
 
-    window.location.href = nylasAuthUrl;
+    window.location.href = authUrl;
   }
 
   return (
