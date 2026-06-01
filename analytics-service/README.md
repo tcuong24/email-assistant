@@ -2,7 +2,7 @@
 title: analytics-service
 emoji: 📊
 colorFrom: green
-colorTo: teal
+colorTo: blue
 sdk: docker
 app_port: 8083
 pinned: false
