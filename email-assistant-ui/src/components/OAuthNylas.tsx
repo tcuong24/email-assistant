@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api/axios';
 
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
@@ -10,7 +10,7 @@ export default function OAuthCallback() {
   useEffect(() => {
     if (code) {
       // Gửi mã code lên backend Gateway để đổi lấy Grant ID và lưu lại
-      axios.post('/api/v1/emails/nylas/connect', { code })
+      api.post('/emails/nylas/connect', { code })
         .then(() => {
           alert('Kết nối hòm thư thành công!');
           navigate('/dashboard');
