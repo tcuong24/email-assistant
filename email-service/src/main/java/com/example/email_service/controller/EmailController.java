@@ -80,6 +80,7 @@ public class EmailController {
 
             java.util.Map<String, String> requestBody = new java.util.HashMap<>();
             requestBody.put("client_id", nylasClientId);
+            requestBody.put("client_secret", nylasApiKey);
             requestBody.put("code", code);
             requestBody.put("redirect_uri", "https://emailflow-ai.netlify.app/oauth/callback");
             requestBody.put("grant_type", "authorization_code");
