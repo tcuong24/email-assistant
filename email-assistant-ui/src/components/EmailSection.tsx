@@ -1,16 +1,22 @@
-import { Star } from "lucide-react"
+import { Paperclip, Star } from "lucide-react"
 import LabelBadge from "./LabelBadge"
-import { stripHtml } from "@/lib/utils"
 
-interface Email {
+export interface Email {
   id: string | number
   fromAddress: string
   subject: string
-  summary?: string
-  body?: string
+  body: string
   label: string
-  status: string
-  receivedAt: string
+  summary?: string
+  receivedAt?: string
+  isUnread?: boolean
+  snippet?: string
+  hasAttachments?: boolean
+  fromName?: string;
+  threadId?: string;
+  isRead?: boolean;
+  threadCount?: number; 
+  status?: string;
 }
 
 interface EmailSectionProps {
@@ -70,7 +76,7 @@ const formatTime = (dateStr: string) => {
 }
 
 const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionProps) => {
-  const isUnread = email.status !== "READ"
+  const isUnread = email.isUnread !== undefined ? email.isUnread : (email.isRead !== undefined ? !email.isRead : email.status !== "READ");
 
   // ─── Horizontal Layout (Full-width Gmail style) ───
   if (layoutMode === "horizontal") {
@@ -118,7 +124,7 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
 
         {/* Sender */}
         <div
-          className="truncate flex-shrink-0"
+          className="truncate flex-shrink-0 flex items-center gap-1.5"
           style={{
             width: 180,
             fontSize: 14,
@@ -127,7 +133,12 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
             paddingRight: 12,
           }}
         >
-          {email.fromAddress.split("@")[0]}
+          <span className="truncate">{email.fromName || email.fromAddress.split("@")[0]}</span>
+          {email.threadCount !== undefined && email.threadCount > 1 && (
+            <span className="text-[12px] font-semibold text-gray-500 flex-shrink-0">
+              {email.threadCount}
+            </span>
+          )}
         </div>
 
         {/* Subject + Preview */}
@@ -222,13 +233,18 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
         {/* Row 1: Sender + Time */}
         <div className="flex items-baseline justify-between gap-2 mb-0.5">
           <span
-            className="text-sm truncate"
+            className="text-sm truncate flex items-center gap-1.5"
             style={{
               color: "var(--text-primary)",
               fontWeight: isUnread ? 700 : 500,
             }}
           >
-            {email.fromAddress.split("@")[0]}
+            <span className="truncate">{email.fromName || email.fromAddress.split("@")[0]}</span>
+            {email.threadCount !== undefined && email.threadCount > 1 && (
+              <span className="text-[11px] font-semibold text-gray-500">
+                ({email.threadCount})
+              </span>
+            )}
           </span>
           <span
             className="text-[12px] flex-shrink-0"
@@ -239,6 +255,9 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
           >
             {formatTime(email.receivedAt)}
           </span>
+          {email.hasAttachments && (
+            <Paperclip className="w-3.5 h-3.5 text-gray-400" />
+          )}
         </div>
 
         {/* Row 2: Subject */}
@@ -262,7 +281,7 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
               lineHeight: "1.4",
             }}
           >
-            {email.summary || stripHtml(email.body) || "Thư không có nội dung."}
+            {email.summary || email.snippet || "Thư không có nội dung."}
           </p>
           <div className="flex-shrink-0">
             <LabelBadge label={email.label} />

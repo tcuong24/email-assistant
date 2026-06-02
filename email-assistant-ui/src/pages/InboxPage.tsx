@@ -5,6 +5,7 @@ import { getEmails } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import EmailSection from '../components/EmailSection'
+import type { Email } from '../components/EmailSection'
 import EmailBodyRenderer from '../components/EmailBodyRenderer'
 import {
   Search,
@@ -30,7 +31,38 @@ export default function InboxPage() {
     refetchInterval: 10000,
   })
 
-  // Filter logic
+  const getThreadedEmails = (rawEmails: Email[]) => {
+    if (!rawEmails) return [];
+    
+    const threads: { [key: string]: Email[] } = {};
+    
+    // Gom nhóm email theo threadId
+    rawEmails.forEach(email => {
+      const tId = email.threadId || `no-thread-${email.id}`;
+      if (!threads[tId]) {
+        threads[tId] = [];
+      }
+      threads[tId].push(email);
+    });
+    // Lọc lấy thư mới nhất trong mỗi nhóm và đính kèm số lượng thư trong luồng
+    return Object.values(threads).map(threadEmails => {
+      // Sắp xếp thư trong luồng theo thời gian giảm dần
+      const sorted = [...threadEmails].sort((a, b) => 
+        new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime()
+      );
+      
+      const latestEmail = { ...sorted[0] }; // Email mới nhất đại diện cho Thread
+      latestEmail.threadCount = threadEmails.length; // Số lượng email trong Thread này
+      
+      // Nếu có ít nhất 1 thư trong Thread chưa đọc, thì coi như cả Thread là CHƯA ĐỌC
+      latestEmail.isUnread = threadEmails.some(e => e.isRead === false || e.status !== "READ"); 
+      
+      return latestEmail;
+    }).sort((a, b) => 
+      new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime()
+    );
+  };
+
   const filteredData = data?.filter(email => {
     let matchesCategory = false
     const labelUpper = email.label?.toUpperCase()
@@ -55,17 +87,21 @@ export default function InboxPage() {
     const searchLower = searchQuery.toLowerCase()
     const matchesSearch =
       email.fromAddress?.toLowerCase().includes(searchLower) ||
+      email.fromName?.toLowerCase().includes(searchLower) ||
       email.subject?.toLowerCase().includes(searchLower) ||
       email.summary?.toLowerCase().includes(searchLower) ||
       email.body?.toLowerCase().includes(searchLower)
     if (!matchesSearch) return false
 
-    const isUnread = email.status !== "READ"
+    const isUnread = email.isRead !== undefined ? !email.isRead : email.status !== "READ"
     if (filterTab === "read") return !isUnread
     if (filterTab === "unread") return isUnread
 
     return true
   }) || []
+
+  // Sử dụng dữ liệu đã gộp luồng
+  const threadedEmails = getThreadedEmails(filteredData || []);
 
   useEffect(() => {
     setSelectedEmailId(null)
@@ -324,7 +360,7 @@ export default function InboxPage() {
 
               {/* Pagination info */}
               <div className="flex items-center gap-2" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                <span>1–{filteredData.length} trong số {data?.length || 0}</span>
+                <span>1–{threadedEmails.length} trong số {data?.length || 0}</span>
               </div>
             </div>
           </>
@@ -341,7 +377,7 @@ export default function InboxPage() {
             </div>
           )}
 
-          {filteredData.map(email => (
+          {threadedEmails.map(email => (
             <EmailSection
               key={email.id}
               email={email}
@@ -351,7 +387,7 @@ export default function InboxPage() {
             />
           ))}
 
-          {filteredData.length === 0 && !isLoading && (
+          {threadedEmails.length === 0 && !isLoading && (
             <div className="text-center" style={{ padding: "64px 24px" }}>
               <div
                 className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
@@ -443,7 +479,7 @@ export default function InboxPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-4">
                     <h2 className="text-base font-bold truncate" style={{ color: "var(--text-primary)", margin: 0 }}>
-                      {selectedEmail!.fromAddress}
+                      {selectedEmail!.fromName || selectedEmail!.fromAddress.split("@")[0]}
                     </h2>
                     <span className="text-xs font-medium flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
                       {new Date(selectedEmail!.receivedAt).toLocaleDateString('vi-VN', {
@@ -455,7 +491,9 @@ export default function InboxPage() {
                     {selectedEmail!.subject}
                   </h3>
                   <p className="text-[11px] mt-1 flex gap-2" style={{ color: "var(--text-secondary)" }}>
-                    <span>To: me</span>
+                    <span>Từ: {selectedEmail!.fromAddress}</span>
+                    <span>•</span>
+                    <span>Tới: tôi</span>
                     {selectedEmail!.label && (
                       <>
                         <span>•</span>

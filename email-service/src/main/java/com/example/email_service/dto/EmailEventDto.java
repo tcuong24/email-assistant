@@ -11,16 +11,27 @@ import lombok.NoArgsConstructor;
 public class EmailEventDto {
 
     // Nhận email mới (từ webhook hoặc API giả lập)
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ReceiveEmailRequest {
         private String fromAddress;
         private String subject;
         private String body;
         private LocalDateTime receivedAt;
+        private String snippet;
+        private boolean hasAttachments;
+        private String fromName;
+        private String threadId;
+        private boolean isRead;
     }
 
     // Gửi lên topic email.received
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class EmailReceivedEvent {
         private Long emailId;
         private String fromAddress;
@@ -28,25 +39,35 @@ public class EmailEventDto {
         private String body;
         private Long userId;
         private String receivedAt;
+        private String snippet;
+        private boolean hasAttachments;
+        private String fromName;
+        private String threadId;
+        private boolean isRead;
     }
 
     // Nhận từ topic ai.result
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class AiResultEvent {
         private Long emailId;
-        private String label;      // SPAM / IMPORTANT / NORMAL
+        private String label; // SPAM / IMPORTANT / NORMAL
         private String summary;
         private List<String> suggestedReplies;
     }
 
     // Gửi notification cho UI (via WebSocket)
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class EmailNotification {
         private Long emailId;
         private String subject;
         private String label;
         private String summary;
         private LocalDateTime processedAt;
+    }
 }
-}
-

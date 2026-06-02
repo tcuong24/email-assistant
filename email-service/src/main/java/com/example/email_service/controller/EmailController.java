@@ -1,6 +1,7 @@
 package com.example.email_service.controller;
 
 import java.util.List;
+import java.util.Map;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -130,12 +131,20 @@ public class EmailController {
                         String subject = (String) object.get("subject");
                         String body = (String) object.get("body");
                         
-                        java.util.List<java.util.Map<String, Object>> fromList = 
-                                (java.util.List<java.util.Map<String, Object>>) object.get("from");
+                         List<Map<String, Object>> fromList = (List<Map<String, Object>>) object.get("from");
                         String fromAddress = "";
+                        String fromName = "";
                         if (fromList != null && !fromList.isEmpty()) {
                             fromAddress = (String) fromList.get(0).get("email");
+                            fromName = (String) fromList.get(0).get("name");
                         }
+                        
+                        String threadId = (String) object.get("thread_id");
+                        boolean unread = object.get("unread") != null ? (boolean) object.get("unread") : true;
+                        boolean isRead = !unread;
+                        String snippet = (String) object.get("snippet");
+                        java.util.List<?> attachments = (java.util.List<?>) object.get("attachments");
+                        boolean hasAttachments = attachments != null && !attachments.isEmpty();
 
                         Long userId = emailService.findUserIdByGrantId(grantId);
                         if (userId != null) {
@@ -143,7 +152,11 @@ public class EmailController {
                             request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
                             request.setBody(body != null ? body : "");
                             request.setFromAddress(fromAddress != null ? fromAddress : "");
-
+                            request.setSnippet(snippet != null ? snippet : "");
+                            request.setHasAttachments(hasAttachments);
+request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
+                            request.setThreadId(threadId);
+                            request.setRead(isRead);
                             emailService.receiveEmail(request, userId);
                         }
                     }

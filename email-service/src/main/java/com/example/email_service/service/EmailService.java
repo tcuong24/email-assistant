@@ -38,57 +38,71 @@ public class EmailService {
     private final NylasConnectionRepository nylasConnectionRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
-
     @Async
-    public void syncHistoricalEmails (String grantId, Long userId, String nylasApiKey , String nylasApiUrl){
+    public void syncHistoricalEmails(String grantId, Long userId, String nylasApiKey, String nylasApiUrl) {
         try {
             RestTemplate restTemplate = new RestTemplate();
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
-            String url = nylasApiUrl + "/v3/grants/" + grantId +"/messages?limit=20";
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET,entity,Map.class);
-            
-           if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
-            List<Map<String, Object>> messages = 
-                    (List<Map<String, Object>>) response.getBody().get("data");
-            if (messages != null) {
-                log.info("Bắt đầu đồng bộ {} email cũ cho userId {}", messages.size(), userId);
-                for (Map<String, Object> msg : messages) {
-                    String subject = (String) msg.get("subject");
-                    String body = (String) msg.get("body");
-                    
-                    LocalDateTime emailDate = LocalDateTime.now();
-                    if (msg.get("date") != null) {
-                        long dateSeconds = ((Number) msg.get("date")).longValue();
-                        emailDate = LocalDateTime.ofInstant(
-                            Instant.ofEpochSecond(dateSeconds), 
-                            ZoneId.systemDefault()
-                        );
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages?limit=20";
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+
+            if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
+                List<Map<String, Object>> messages = (List<Map<String, Object>>) response.getBody().get("data");
+                if (messages != null) {
+                    log.info("Bắt đầu đồng bộ {} email cũ cho userId {}", messages.size(), userId);
+                    for (Map<String, Object> msg : messages) {
+                        String subject = (String) msg.get("subject");
+                        String body = (String) msg.get("body");
+
+                        LocalDateTime emailDate = LocalDateTime.now();
+                        if (msg.get("date") != null) {
+                            long dateSeconds = ((Number) msg.get("date")).longValue();
+                            emailDate = LocalDateTime.ofInstant(
+                                    Instant.ofEpochSecond(dateSeconds),
+                                    ZoneId.systemDefault());
+                        }
+
+                        String snippet = (String) msg.get("snippet");
+                        List<?> attachments = (List<?>) msg.get("attachments");
+                        boolean hasAttachments = attachments != null && !attachments.isEmpty();
+                        // Lấy địa chỉ email người gửi từ mảng "from"
+                        List<Map<String, Object>> fromList = (List<Map<String, Object>>) msg.get("from");
+                        String fromAddress = "";
+                        String fromName = "";
+                        if (fromList != null && !fromList.isEmpty()) {
+                            fromAddress = (String) fromList.get(0).get("email");
+                            fromName = (String) fromList.get(0).get("name");
+                        }
+
+                        String threadId = (String) msg.get("thread_id");
+                        boolean unread = msg.get("unread") != null ? (boolean) msg.get("unread") : true;
+                        boolean isRead = !unread;
+                        // Tận dụng hàm receiveEmail đã viết sẵn để lưu DB và publish lên Kafka cho AI
+                        // xử lý
+                        ReceiveEmailRequest request = new ReceiveEmailRequest();
+                        request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
+                        request.setBody(body != null ? body : "");
+                        request.setSnippet(snippet != null ? snippet : "");
+                        request.setHasAttachments(hasAttachments);
+                        request.setReceivedAt(emailDate);
+                        request.setFromAddress(fromAddress != null ? fromAddress : "");
+                        request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
+                        request.setThreadId(threadId);
+                        request.setRead(isRead);
+
+                        this.receiveEmail(request, userId);
                     }
-                    // Lấy địa chỉ email người gửi từ mảng "from"
-                    List<Map<String, Object>> fromList = 
-                            (List<Map<String, Object>>) msg.get("from");
-                    String fromAddress = "";
-                    if (fromList != null && !fromList.isEmpty()) {
-                        fromAddress = (String) fromList.get(0).get("email");
-                    }
-                    // Tận dụng hàm receiveEmail đã viết sẵn để lưu DB và publish lên Kafka cho AI xử lý
-                    ReceiveEmailRequest request = new ReceiveEmailRequest();
-                    request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
-                    request.setBody(body != null ? body : "");
-                    request.setReceivedAt(emailDate);
-                    request.setFromAddress(fromAddress != null ? fromAddress : "");
-                    this.receiveEmail(request, userId);
+                    log.info("Hoàn tất đẩy {} email cũ lên hàng đợi xử lý AI cho userId {}", messages.size(), userId);
                 }
-                log.info("Hoàn tất đẩy {} email cũ lên hàng đợi xử lý AI cho userId {}", messages.size(), userId);
             }
-        }
         } catch (Exception e) {
             log.error("Lỗi đồng bộ email lịch sử cho userId {}: {}", userId, e.getMessage());
         }
     }
+
     @Transactional
     public void saveNylasConnection(Long userId, String grantId) {
         NylasConnection connection = NylasConnection.builder()
@@ -116,7 +130,12 @@ public class EmailService {
                 .subject(request.getSubject())
                 .body(request.getBody())
                 .userId(userId)
+                .fromName(request.getFromName())
+                .threadId(request.getThreadId())
+                .isRead(request.isRead())
                 .label(Email.EmailLabel.PENDING)
+                .snippet(request.getSnippet())
+                .hasAttachments(request.isHasAttachments())
                 .receivedAt(request.getReceivedAt() != null ? request.getReceivedAt() : LocalDateTime.now())
                 .build();
 
@@ -129,11 +148,16 @@ public class EmailService {
                 .subject(email.getSubject())
                 .body(email.getBody())
                 .userId(email.getUserId())
+                .fromName(email.getFromName())
+                .threadId(email.getThreadId())
+                .isRead(email.isRead())
+                .snippet(email.getSnippet())
+                .hasAttachments(email.isHasAttachments())
                 .receivedAt(email.getReceivedAt() != null ? email.getReceivedAt().toString() : null)
                 .build();
 
-        kafkaTemplate.send(emailReceivedTopic, 
-                           String.valueOf(email.getId()), event);
+        kafkaTemplate.send(emailReceivedTopic,
+                String.valueOf(email.getId()), event);
 
         log.info("Email {} nhận và publish lên Kafka", email.getId());
         return email;
@@ -146,11 +170,10 @@ public class EmailService {
             email.setLabel(Email.EmailLabel.valueOf(event.getLabel()));
             email.setSummary(event.getSummary());
             email.setSuggestedReplies(
-                String.join("||", event.getSuggestedReplies())
-            );
+                    String.join("||", event.getSuggestedReplies()));
             emailRepository.save(email);
-            log.info("Email {} cập nhật AI result: {}", 
-                     email.getId(), event.getLabel());
+            log.info("Email {} cập nhật AI result: {}",
+                    email.getId(), event.getLabel());
         });
     }
 

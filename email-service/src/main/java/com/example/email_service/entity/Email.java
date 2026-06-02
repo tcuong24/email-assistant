@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -44,7 +43,7 @@ public class Email {
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    private EmailLabel  label = EmailLabel.PENDING;
+    private EmailLabel label = EmailLabel.PENDING;
 
     @Column(columnDefinition = "TEXT")
     private String summary;
@@ -54,14 +53,25 @@ public class Email {
     private String suggestedReplies;
 
     @Column(nullable = false)
-    private Long userId;  // owner
+    private Long userId; // owner
 
     private LocalDateTime receivedAt;
-
+    @Column(columnDefinition = "TEXT")
+    private String snippet;
+    
+    @Builder.Default
+    private boolean hasAttachments = false;
+    
+    private String fromName; 
+    private String threadId; 
+    
+    @Builder.Default
+    private boolean isRead = false;
+    
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    public enum EmailLabel  {
-        PENDING,SPAM,IMPORTANT,NORMAL,WORK,PERSONAL
+    public enum EmailLabel {
+        PENDING, SPAM, IMPORTANT, NORMAL, WORK, PERSONAL
     }
 }
