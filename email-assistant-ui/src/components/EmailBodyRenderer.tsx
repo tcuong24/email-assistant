@@ -57,7 +57,7 @@ export default function EmailBodyRenderer({ body = "" }: EmailBodyRendererProps)
       <iframe
         ref={iframeRef}
         title="Email Content"
-        sandbox="allow-popups allow-popups-to-escape-sandbox"
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         style={{
           width: "100%",
           height: iframeHeight,
