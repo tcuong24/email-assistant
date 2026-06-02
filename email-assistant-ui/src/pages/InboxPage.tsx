@@ -62,8 +62,6 @@ export default function InboxPage() {
       new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime()
     );
   };
-  // Sử dụng dữ liệu đã gộp luồng
-  const threadedEmails = getThreadedEmails(filteredData || []);
   const filteredData = data?.filter(email => {
     let matchesCategory = false
     const labelUpper = email.label?.toUpperCase()
@@ -99,6 +97,9 @@ export default function InboxPage() {
 
     return true
   }) || []
+
+  // Sử dụng dữ liệu đã gộp luồng
+  const threadedEmails = getThreadedEmails(filteredData || []);
 
   useEffect(() => {
     setSelectedEmailId(null)
