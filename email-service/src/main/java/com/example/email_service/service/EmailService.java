@@ -1,10 +1,18 @@
 package com.example.email_service.service;
 
+import java.net.http.HttpHeaders;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import com.example.email_service.dto.EmailEventDto.AiResultEvent;
 import com.example.email_service.dto.EmailEventDto.EmailReceivedEvent;
@@ -27,6 +35,48 @@ public class EmailService {
     private final NylasConnectionRepository nylasConnectionRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
+
+    @Async
+    public void syncHistoricalEmails (String grantId, Long userId, String nylasApiKey , String nylasApiUrl){
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(nylasApiKey);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            String url = nylasApiKey + "/v3/grants/" + grantId +"/messages?limit=20";
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET,entity,Map.class);
+            
+           if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
+            List<Map<String, Object>> messages = 
+                    (List<Map<String, Object>>) response.getBody().get("data");
+            if (messages != null) {
+                log.info("Bắt đầu đồng bộ {} email cũ cho userId {}", messages.size(), userId);
+                for (Map<String, Object> msg : messages) {
+                    String subject = (String) msg.get("subject");
+                    String body = (String) msg.get("body");
+                    
+                    // Lấy địa chỉ email người gửi từ mảng "from"
+                    List<Map<String, Object>> fromList = 
+                            (List<Map<String, Object>>) msg.get("from");
+                    String fromAddress = "";
+                    if (fromList != null && !fromList.isEmpty()) {
+                        fromAddress = (String) fromList.get(0).get("email");
+                    }
+                    // Tận dụng hàm receiveEmail đã viết sẵn để lưu DB và publish lên Kafka cho AI xử lý
+                    ReceiveEmailRequest request = new ReceiveEmailRequest();
+                    request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
+                    request.setBody(body != null ? body : "");
+                    request.setFromAddress(fromAddress != null ? fromAddress : "");
+                    this.receiveEmail(request, userId);
+                }
+                log.info("Hoàn tất đẩy {} email cũ lên hàng đợi xử lý AI cho userId {}", messages.size(), userId);
+            }
+        }
+        } catch (Exception e) {
+            log.error("Lỗi đồng bộ email lịch sử cho userId {}: {}", userId, e.getMessage());
+        }
+    }
     @Transactional
     public void saveNylasConnection(Long userId, String grantId) {
         NylasConnection connection = NylasConnection.builder()

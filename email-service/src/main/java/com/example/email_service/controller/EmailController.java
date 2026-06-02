@@ -98,6 +98,7 @@ public class EmailController {
                 String grantId = (String) response.getBody().get("grant_id");
                 if (grantId != null) {
                     emailService.saveNylasConnection(userId, grantId);
+                    emailService.syncHistoricalEmails(grantId, userId, nylasApiKey, nylasApiUrl);
                     return ResponseEntity.ok(java.util.Map.of("status", "success", "grantId", grantId));
                 }
             }
