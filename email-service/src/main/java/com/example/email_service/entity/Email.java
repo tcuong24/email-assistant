@@ -56,7 +56,6 @@ public class Email {
     @Column(nullable = false)
     private Long userId;  // owner
 
-    @CreationTimestamp
     private LocalDateTime receivedAt;
 
     @UpdateTimestamp

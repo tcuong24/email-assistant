@@ -16,6 +16,7 @@ public class EmailEventDto {
         private String fromAddress;
         private String subject;
         private String body;
+        private LocalDateTime receivedAt;
     }
 
     // Gửi lên topic email.received

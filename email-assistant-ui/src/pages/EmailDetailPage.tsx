@@ -10,6 +10,7 @@ import {
   CornerUpRight,
   ArrowLeft,
 } from 'lucide-react'
+import { stripHtml } from '@/lib/utils'
 
 export default function EmailDetailPage() {
   const { id } = useParams()
@@ -206,7 +207,7 @@ export default function EmailDetailPage() {
                 border: "1px solid #F3F4F6",
               }}
             >
-              {email?.body}
+              { stripHtml(email?.body)}
             </div>
 
             {/* Suggested Replies */}

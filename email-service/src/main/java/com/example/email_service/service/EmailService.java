@@ -1,6 +1,9 @@
 package com.example.email_service.service;
 
 import java.net.http.HttpHeaders;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +59,14 @@ public class EmailService {
                     String subject = (String) msg.get("subject");
                     String body = (String) msg.get("body");
                     
+                    LocalDateTime emailDate = LocalDateTime.now();
+                    if (msg.get("date") != null) {
+                        long dateSeconds = ((Number) msg.get("date")).longValue();
+                        emailDate = LocalDateTime.ofInstant(
+                            Instant.ofEpochSecond(dateSeconds), 
+                            ZoneId.systemDefault()
+                        );
+                    }
                     // Lấy địa chỉ email người gửi từ mảng "from"
                     List<Map<String, Object>> fromList = 
                             (List<Map<String, Object>>) msg.get("from");
@@ -67,6 +78,7 @@ public class EmailService {
                     ReceiveEmailRequest request = new ReceiveEmailRequest();
                     request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
                     request.setBody(body != null ? body : "");
+                    request.setReceivedAt(emailDate);
                     request.setFromAddress(fromAddress != null ? fromAddress : "");
                     this.receiveEmail(request, userId);
                 }
@@ -105,6 +117,7 @@ public class EmailService {
                 .body(request.getBody())
                 .userId(userId)
                 .label(Email.EmailLabel.PENDING)
+                .receivedAt(request.getReceivedAt() != null ? request.getReceivedAt() : LocalDateTime.now())
                 .build();
 
         email = emailRepository.save(email);

@@ -1,5 +1,6 @@
 import { Star } from "lucide-react"
 import LabelBadge from "./LabelBadge"
+import { stripHtml } from "@/lib/utils"
 
 interface Email {
   id: string | number
@@ -261,7 +262,7 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
               lineHeight: "1.4",
             }}
           >
-            {email.summary || email.body || "Thư không có nội dung."}
+            {email.summary || stripHtml(email.body) || "Thư không có nội dung."}
           </p>
           <div className="flex-shrink-0">
             <LabelBadge label={email.label} />
