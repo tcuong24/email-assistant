@@ -60,6 +60,7 @@ spring:
             allowedOrigins:
               - "http://localhost:3000"
               - "https://emailflow-ai.netlify.app"
+              - "https://email-assistant-orcin-eta.vercel.app"
             allowedMethods:
               - GET
               - POST
