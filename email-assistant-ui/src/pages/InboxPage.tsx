@@ -25,115 +25,17 @@ export default function InboxPage() {
   const [filterTab, setFilterTab] = useState("all")
   const [selectedEmailId, setSelectedEmailId] = useState<string | number | null>(null)
 
-  const { data: rawData, isLoading, error, refetch, isFetching } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['emails'],
     queryFn: () => getEmails().then(r => r.data),
     refetchInterval: 10000,
   })
 
-  // Mock data làm fallback khi API lỗi (ví dụ hết token Nylas) hoặc không có dữ liệu để test giao diện
-  const MOCK_EMAILS: Email[] = [
-    {
-      id: "mock-1",
-      fromAddress: "noreply@github.com",
-      fromName: "GitHub",
-      subject: "[GitHub] A third-party OAuth application has been added to your account",
-      body: `<h3>Hi tcuong24!</h3>
-      <p>A third-party OAuth application (<b>Neon Console</b>) with user access was recently authorized to access your account.</p>
-      <p>If this was you, no further action is required.</p>`,
-      summary: "GitHub thông báo ứng dụng Neon Console đã được cấp quyền truy cập tài khoản của bạn.",
-      snippet: "Hey tcuong24! A third-party OAuth application (Neon Console) with user access was recently authorized...",
-      label: "PRIMARY",
-      isRead: true,
-      threadId: "thread-github-oauth",
-      receivedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      hasAttachments: false
-    },
-    {
-      id: "mock-2",
-      fromAddress: "noreply@github.com",
-      fromName: "GitHub",
-      subject: "[GitHub] A third-party OAuth application has been added to your account",
-      body: `<h3>Hi tcuong24!</h3>
-      <p>Đây là email thứ hai trong cuộc hội thoại để tạo stack luồng thư. Bạn có thể thấy số lượng thư hiển thị là 2.</p>`,
-      summary: "Phản hồi thứ hai từ GitHub liên quan đến Neon Console OAuth.",
-      snippet: "Đây là email thứ hai trong cuộc hội thoại để tạo stack luồng thư...",
-      label: "PRIMARY",
-      isRead: false,
-      threadId: "thread-github-oauth",
-      receivedAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-      hasAttachments: false
-    },
-    {
-      id: "mock-3",
-      fromAddress: "notifications@railway.app",
-      fromName: "Railway",
-      subject: "Build failed for satisfied-determination",
-      body: `<div style="font-family: sans-serif; padding: 20px; border: 1px solid #fee2e2; background-color: #fef2f2; border-radius: 8px;">
-        <h3 style="color: #ef4444; margin-top: 0;">Build failed for project: satisfied-determination</h3>
-        <p>This is awkward. One of your builds failed to leave the wheelhouse. Please check the logs on the dashboard to resolve this.</p>
-      </div>`,
-      summary: "Dự án satisfied-determination của bạn trên Railway bị lỗi build, vui lòng kiểm tra log.",
-      snippet: "Build failed for project: satisfied-determination. This is awkward. One of your builds failed...",
-      label: "UPDATES",
-      isRead: false,
-      threadId: "thread-railway-satisfied",
-      receivedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-      hasAttachments: false
-    },
-    {
-      id: "mock-4",
-      fromAddress: "notifications@railway.app",
-      fromName: "Railway",
-      subject: "Build failed for satisfied-determination",
-      body: `<p>Build failed lần thứ hai cho dự án satisfied-determination.</p>`,
-      summary: "Dự án satisfied-determination lỗi build lần thứ 2.",
-      snippet: "Build failed lần 2 cho dự án satisfied-determination.",
-      label: "UPDATES",
-      isRead: true,
-      threadId: "thread-railway-satisfied",
-      receivedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      hasAttachments: false
-    },
-    {
-      id: "mock-5",
-      fromAddress: "notifications@railway.app",
-      fromName: "Railway",
-      subject: "Build failed for satisfied-determination",
-      body: `<p>Build failed lần thứ ba cho dự án satisfied-determination.</p>`,
-      summary: "Dự án satisfied-determination lỗi build lần thứ 3.",
-      snippet: "Build failed lần 3 cho dự án satisfied-determination.",
-      label: "UPDATES",
-      isRead: true,
-      threadId: "thread-railway-satisfied",
-      receivedAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-      hasAttachments: false
-    },
-    {
-      id: "mock-6",
-      fromAddress: "promotions@nylas.com",
-      fromName: "Nylas Dev Support",
-      subject: "Welcome to Nylas v3 Email Sync APIs",
-      body: `<p>Get started with synchronization, webhooks, and advanced cognitive integrations today!</p>
-      <p>Find detailed developer docs at <a href="https://developer.nylas.com">developer.nylas.com</a>.</p>`,
-      summary: "Thư chào mừng từ Nylas, hướng dẫn đồng bộ email và tích hợp webhook.",
-      snippet: "Get started with synchronization, webhooks, and advanced cognitive integrations...",
-      label: "PROMOTIONS",
-      isRead: true,
-      threadId: "thread-nylas-welcome",
-      receivedAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-      hasAttachments: true
-    }
-  ];
-
-  const isDemoMode = error || !rawData || rawData.length === 0;
-  const data = isDemoMode ? MOCK_EMAILS : rawData;
-
   const getThreadedEmails = (rawEmails: Email[]) => {
     if (!rawEmails) return [];
-    
+
     const threads: { [key: string]: Email[] } = {};
-    
+
     // Gom nhóm email theo threadId
     rawEmails.forEach(email => {
       const tId = email.threadId || `no-thread-${email.id}`;
@@ -145,22 +47,23 @@ export default function InboxPage() {
     // Lọc lấy thư mới nhất trong mỗi nhóm và đính kèm số lượng thư trong luồng
     return Object.values(threads).map(threadEmails => {
       // Sắp xếp thư trong luồng theo thời gian giảm dần
-      const sorted = [...threadEmails].sort((a, b) => 
+      const sorted = [...threadEmails].sort((a, b) =>
         new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime()
       );
-      
-      const latestEmail = { ...sorted[0] }; // Email mới nhất đại diện cho Thread
+
+      const latestEmail = sorted[0]; // Email mới nhất đại diện cho Thread
       latestEmail.threadCount = threadEmails.length; // Số lượng email trong Thread này
-      
+
       // Nếu có ít nhất 1 thư trong Thread chưa đọc, thì coi như cả Thread là CHƯA ĐỌC
-      latestEmail.isUnread = threadEmails.some(e => e.isRead === false || e.status !== "READ"); 
-      
+      latestEmail.isUnread = threadEmails.some(e => !e.isRead);
+
       return latestEmail;
-    }).sort((a, b) => 
+    }).sort((a, b) =>
       new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime()
     );
   };
-
+  // Sử dụng dữ liệu đã gộp luồng
+  const threadedEmails = getThreadedEmails(filteredData || []);
   const filteredData = data?.filter(email => {
     let matchesCategory = false
     const labelUpper = email.label?.toUpperCase()
@@ -185,21 +88,17 @@ export default function InboxPage() {
     const searchLower = searchQuery.toLowerCase()
     const matchesSearch =
       email.fromAddress?.toLowerCase().includes(searchLower) ||
-      email.fromName?.toLowerCase().includes(searchLower) ||
       email.subject?.toLowerCase().includes(searchLower) ||
       email.summary?.toLowerCase().includes(searchLower) ||
       email.body?.toLowerCase().includes(searchLower)
     if (!matchesSearch) return false
 
-    const isUnread = email.isRead !== undefined ? !email.isRead : email.status !== "READ"
+    const isUnread = email.status !== "READ"
     if (filterTab === "read") return !isUnread
     if (filterTab === "unread") return isUnread
 
     return true
   }) || []
-
-  // Sử dụng dữ liệu đã gộp luồng
-  const threadedEmails = getThreadedEmails(filteredData || []);
 
   useEffect(() => {
     setSelectedEmailId(null)
@@ -301,11 +200,6 @@ export default function InboxPage() {
                 >
                   {getCategoryTitle(activeCategory)}
                 </h1>
-                {isDemoMode && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#D97706", border: "1px solid #FCD34D" }}>
-                    Demo
-                  </span>
-                )}
                 <button
                   onClick={() => refetch()}
                   className={`p-1.5 rounded-lg transition-all duration-200 hover:bg-gray-100 ${isFetching ? "animate-spin" : ""}`}
@@ -393,13 +287,6 @@ export default function InboxPage() {
 
               {/* Spacer */}
               <div className="flex-1" />
-
-              {isDemoMode && (
-                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 flex-shrink-0" style={{ background: "#FEF3C7", color: "#D97706", border: "1px solid #FCD34D" }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                  Chế độ Demo (Mock Data)
-                </span>
-              )}
 
               {/* Actions */}
               <button
@@ -589,7 +476,7 @@ export default function InboxPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-4">
                     <h2 className="text-base font-bold truncate" style={{ color: "var(--text-primary)", margin: 0 }}>
-                      {selectedEmail!.fromName || selectedEmail!.fromAddress.split("@")[0]}
+                      {selectedEmail!.fromAddress}
                     </h2>
                     <span className="text-xs font-medium flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
                       {new Date(selectedEmail!.receivedAt).toLocaleDateString('vi-VN', {
@@ -601,9 +488,7 @@ export default function InboxPage() {
                     {selectedEmail!.subject}
                   </h3>
                   <p className="text-[11px] mt-1 flex gap-2" style={{ color: "var(--text-secondary)" }}>
-                    <span>Từ: {selectedEmail!.fromAddress}</span>
-                    <span>•</span>
-                    <span>Tới: tôi</span>
+                    <span>To: me</span>
                     {selectedEmail!.label && (
                       <>
                         <span>•</span>
