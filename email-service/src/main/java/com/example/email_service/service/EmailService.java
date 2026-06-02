@@ -44,7 +44,7 @@ public class EmailService {
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
-            String url = nylasApiKey + "/v3/grants/" + grantId +"/messages?limit=20";
+            String url = nylasApiUrl + "/v3/grants/" + grantId +"/messages?limit=20";
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET,entity,Map.class);
             
            if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
