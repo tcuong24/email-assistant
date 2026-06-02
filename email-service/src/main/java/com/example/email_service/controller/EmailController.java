@@ -59,6 +59,9 @@ public class EmailController {
     @org.springframework.beans.factory.annotation.Value("${NYLAS_API_KEY:}")
     private String nylasApiKey;
 
+    @org.springframework.beans.factory.annotation.Value("${app.nylas.redirect-uri:https://emailflow-ai.netlify.app/oauth/callback}")
+    private String nylasRedirectUri;
+
     @org.springframework.beans.factory.annotation.Value("${NYLAS_API_URL:https://api.us.nylas.com}")
     private String nylasApiUrl;
 
@@ -67,7 +70,7 @@ public class EmailController {
     public ResponseEntity<?> connectNylas(
             @RequestBody java.util.Map<String, String> body,
             @RequestHeader("X-User-Id") Long userId) {
-        
+
         String code = body.get("code");
         if (code == null || code.isEmpty()) {
             return ResponseEntity.badRequest().body("Mã code không hợp lệ");
@@ -83,17 +86,16 @@ public class EmailController {
             requestBody.put("client_id", nylasClientId);
             requestBody.put("client_secret", nylasApiKey);
             requestBody.put("code", code);
-            requestBody.put("redirect_uri", "https://emailflow-ai.netlify.app/oauth/callback");
+            requestBody.put("redirect_uri", nylasRedirectUri);
             requestBody.put("grant_type", "authorization_code");
 
-            org.springframework.http.HttpEntity<java.util.Map<String, String>> entity = 
-                    new org.springframework.http.HttpEntity<>(requestBody, headers);
-            
+            org.springframework.http.HttpEntity<java.util.Map<String, String>> entity = new org.springframework.http.HttpEntity<>(
+                    requestBody, headers);
+
             org.springframework.http.ResponseEntity<java.util.Map> response = restTemplate.postForEntity(
-                nylasApiUrl + "/v3/connect/token", 
-                entity, 
-                java.util.Map.class
-            );
+                    nylasApiUrl + "/v3/connect/token",
+                    entity,
+                    java.util.Map.class);
 
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
                 String grantId = (String) response.getBody().get("grant_id");
@@ -130,15 +132,15 @@ public class EmailController {
                     if (grantId != null && object != null) {
                         String subject = (String) object.get("subject");
                         String body = (String) object.get("body");
-                        
-                         List<Map<String, Object>> fromList = (List<Map<String, Object>>) object.get("from");
+
+                        List<Map<String, Object>> fromList = (List<Map<String, Object>>) object.get("from");
                         String fromAddress = "";
                         String fromName = "";
                         if (fromList != null && !fromList.isEmpty()) {
                             fromAddress = (String) fromList.get(0).get("email");
                             fromName = (String) fromList.get(0).get("name");
                         }
-                        
+
                         String threadId = (String) object.get("thread_id");
                         boolean unread = object.get("unread") != null ? (boolean) object.get("unread") : true;
                         boolean isRead = !unread;
@@ -154,7 +156,7 @@ public class EmailController {
                             request.setFromAddress(fromAddress != null ? fromAddress : "");
                             request.setSnippet(snippet != null ? snippet : "");
                             request.setHasAttachments(hasAttachments);
-request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
+                            request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
                             request.setThreadId(threadId);
                             request.setRead(isRead);
                             emailService.receiveEmail(request, userId);
