@@ -161,7 +161,7 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
               fontWeight: 400,
             }}
           >
-            {email.summary || email.body || "Thư không có nội dung."}
+            {email.summary || email.snippet || "Thư không có nội dung."}
           </span>
         </div>
 
