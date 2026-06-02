@@ -5,6 +5,7 @@ import { getEmails } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import EmailSection from '../components/EmailSection'
+import EmailBodyRenderer from '../components/EmailBodyRenderer'
 import {
   Search,
   Plus,
@@ -480,10 +481,10 @@ export default function InboxPage() {
 
               {/* Body */}
               <div
-                className="text-sm leading-[1.7] whitespace-pre-line"
-                style={{ color: "#374151", padding: "var(--space-lg)", background: "#FAFBFC", borderRadius: 12, border: "1px solid #F3F4F6" }}
+                className="text-sm"
+                style={{ padding: "var(--space-lg)", background: "#FAFBFC", borderRadius: 12, border: "1px solid #F3F4F6" }}
               >
-                {selectedEmail!.body || "Thư không có nội dung."}
+                <EmailBodyRenderer body={selectedEmail!.body} />
               </div>
 
               {/* Suggested Replies */}

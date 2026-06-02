@@ -11,6 +11,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { stripHtml } from '@/lib/utils'
+import EmailBodyRenderer from '../components/EmailBodyRenderer'
 
 export default function EmailDetailPage() {
   const { id } = useParams()
@@ -197,17 +198,15 @@ export default function EmailDetailPage() {
 
             {/* Body */}
             <div
-              className="text-sm whitespace-pre-wrap"
+              className="text-sm"
               style={{
-                color: "#374151",
-                lineHeight: 1.7,
                 padding: "var(--space-lg)",
                 background: "#FAFBFC",
                 borderRadius: 12,
                 border: "1px solid #F3F4F6",
               }}
             >
-              { stripHtml(email?.body)}
+              <EmailBodyRenderer body={email?.body} />
             </div>
 
             {/* Suggested Replies */}
