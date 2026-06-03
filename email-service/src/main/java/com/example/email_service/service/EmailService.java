@@ -317,4 +317,87 @@ public class EmailService {
         }
         return null;
     }
+
+    @Transactional
+    public Email sendEmail(com.example.email_service.dto.EmailEventDto.SendEmailRequest request, Long userId) {
+        String grantId = findGrantIdByUserId(userId);
+        if (grantId == null || grantId.isEmpty()) {
+            throw new RuntimeException("Hòm thư chưa được kết nối");
+        }
+
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(nylasApiKey);
+
+            // Construct payload for Nylas
+            Map<String, Object> toMap = Map.of("email", request.getTo());
+            Map<String, Object> bodyMap = new java.util.HashMap<>();
+            bodyMap.put("subject", request.getSubject());
+            bodyMap.put("body", request.getBody());
+            bodyMap.put("to", List.of(toMap));
+
+            if (request.getReplyToMessageId() != null && !request.getReplyToMessageId().isEmpty()) {
+                bodyMap.put("reply_to_message_id", request.getReplyToMessageId());
+            }
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(bodyMap, headers);
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages/send";
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
+
+            if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
+                Map responseBody = response.getBody();
+                Map dataMap = (Map) responseBody.get("data");
+                String threadId = null;
+                if (dataMap != null) {
+                    threadId = (String) dataMap.get("thread_id");
+                }
+
+                // Lưu vào database với nhãn SENT
+                Email email = Email.builder()
+                        .fromAddress(userEmailFromGrantId(grantId))
+                        .subject(request.getSubject())
+                        .body(request.getBody())
+                        .userId(userId)
+                        .fromName("Me")
+                        .threadId(threadId)
+                        .isRead(true)
+                        .label(Email.EmailLabel.SENT)
+                        .category(Email.EmailCategory.PRIMARY)
+                        .snippet(request.getBody() != null ? (request.getBody().replace(/<[^>]*>/g, "").length() > 100 ? request.getBody().replace(/<[^>]*>/g, "").substring(0, 100) : request.getBody().replace(/<[^>]*>/g, "")) : "")
+                        .hasAttachments(false)
+                        .receivedAt(LocalDateTime.now())
+                        .build();
+
+                return emailRepository.save(email);
+            } else {
+                throw new RuntimeException("Nylas API returned error status: " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.error("Lỗi gửi email cho userId {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Gửi email thất bại: " + e.getMessage());
+        }
+    }
+
+    private String userEmailFromGrantId(String grantId) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setBearerAuth(nylasApiKey);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            String url = nylasApiUrl + "/v3/grants/" + grantId;
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+            if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
+                Map body = response.getBody();
+                Map data = (Map) body.get("data");
+                if (data != null && data.containsKey("email")) {
+                    return (String) data.get("email");
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch email for grantId={}: {}", grantId, e.getMessage());
+        }
+        return "me@example.com";
+    }
 }

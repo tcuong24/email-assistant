@@ -92,6 +92,14 @@ public class EmailController {
         return ResponseEntity.ok(emailService.getEmailsByThread(threadId, userId));
     }
 
+    // Gửi email mới hoặc phản hồi
+    @PostMapping("/send")
+    public ResponseEntity<Email> sendEmail(
+            @RequestBody @Valid com.example.email_service.dto.EmailEventDto.SendEmailRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(emailService.sendEmail(request, userId));
+    }
+
     // ── NYLAS INTEGRATION ──────────────────────────────────────────────
 
     @org.springframework.beans.factory.annotation.Value("${NYLAS_CLIENT_ID:}")

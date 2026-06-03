@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getEmail, analyzeEmail, getThreadEmails } from '../api/emailApi'
+import { getEmail, analyzeEmail, getThreadEmails, sendEmail } from '../api/emailApi'
 import Sidebar from '../components/Sidebar'
 import LabelBadge from '../components/LabelBadge'
+import ComposeModal from '../components/ComposeModal'
 import {
   Reply,
   Trash2,
@@ -11,6 +12,7 @@ import {
   CornerUpRight,
   ArrowLeft,
   Paperclip,
+  Send,
 } from 'lucide-react'
 import { stripHtml } from '@/lib/utils'
 import EmailBodyRenderer from '../components/EmailBodyRenderer'
@@ -34,9 +36,12 @@ export default function EmailDetailPage() {
   }, [email, id])
 
   const [expandedEmailIds, setExpandedEmailIds] = useState<{ [key: string]: boolean }>({})
+  const [isComposeOpen, setIsComposeOpen] = useState(false)
+  const [replyBody, setReplyBody] = useState("")
+  const [isSendingReply, setIsSendingReply] = useState(false)
 
   // Lấy tất cả email trong cùng luồng
-  const { data: threadEmails, isLoading: isThreadLoading } = useQuery({
+  const { data: threadEmails, isLoading: isThreadLoading, refetch: refetchThread } = useQuery({
     queryKey: ['threadEmails', email?.threadId],
     queryFn: () => {
       if (email?.threadId) {
@@ -68,6 +73,33 @@ export default function EmailDetailPage() {
       ...prev,
       [emailId]: !prev[emailId]
     }))
+  }
+
+  const handleApplySuggestion = (suggestion: string) => {
+    setReplyBody(suggestion.trim())
+    const replyInput = document.getElementById("reply-textarea-detail")
+    if (replyInput) {
+      replyInput.focus()
+    }
+  }
+
+  const handleSendReply = async () => {
+    if (!replyBody.trim() || !email) return
+    setIsSendingReply(true)
+    try {
+      await sendEmail({
+        to: email.fromAddress,
+        subject: email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
+        body: replyBody,
+        replyToMessageId: email.id.toString(),
+      })
+      setReplyBody("")
+      refetchThread()
+    } catch (err) {
+      console.error("Gửi phản hồi thất bại:", err)
+    } finally {
+      setIsSendingReply(false)
+    }
   }
 
   const getAvatarInitials = (address: string) => {
@@ -115,7 +147,7 @@ export default function EmailDetailPage() {
   return (
     <div className="h-screen flex overflow-hidden" style={{ background: "var(--bg-main)" }}>
       {/* Sidebar */}
-      <Sidebar />
+      <Sidebar onComposeClick={() => setIsComposeOpen(true)} />
 
       {/* Detail Content — Full Width */}
       <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "var(--bg-panel)" }}>
@@ -146,6 +178,13 @@ export default function EmailDetailPage() {
             ].map((action, i) => (
               <button
                 key={i}
+                onClick={() => {
+                  const replyInput = document.getElementById("reply-textarea-detail")
+                  if (replyInput) {
+                    replyInput.scrollIntoView({ behavior: 'smooth' })
+                    replyInput.focus()
+                  }
+                }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-gray-100"
                 style={{ color: "var(--text-secondary)" }}
               >
@@ -335,6 +374,7 @@ export default function EmailDetailPage() {
                               {replies.map((reply, i) => (
                                 <div
                                   key={i}
+                                  onClick={() => handleApplySuggestion(reply)}
                                   className="text-xs cursor-pointer transition-all duration-200 hover:shadow-sm"
                                   style={{ padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", background: "var(--bg-panel)" }}
                                   onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent-primary)"; (e.currentTarget as HTMLDivElement).style.background = "#F8FAFF" }}
@@ -351,10 +391,47 @@ export default function EmailDetailPage() {
                   </div>
                 )
               })}
+
+              {/* Reply Box */}
+              {email && (
+                <div className="border rounded-xl p-4 bg-white shadow-sm mt-2 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold bg-indigo-600">
+                      Me
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">Trả lời cho: {email.fromAddress}</span>
+                  </div>
+                  <textarea
+                    id="reply-textarea-detail"
+                    value={replyBody}
+                    onChange={(e) => setReplyBody(e.target.value)}
+                    placeholder="Viết câu trả lời của bạn ở đây..."
+                    className="w-full min-h-[100px] outline-none text-sm border border-gray-200 rounded-lg p-3 bg-gray-50/20 focus:bg-white focus:border-indigo-300 transition-all resize-y"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={handleSendReply}
+                      disabled={isSendingReply || !replyBody.trim()}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-50 disabled:scale-100 cursor-pointer"
+                      style={{ background: "var(--accent-primary)", border: "none" }}
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{isSendingReply ? "Đang gửi..." : "Gửi phản hồi"}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Floating Compose Modal */}
+      <ComposeModal
+        isOpen={isComposeOpen}
+        onClose={() => setIsComposeOpen(false)}
+        onSuccess={() => navigate(-1)}
+      />
     </div>
   )
 }

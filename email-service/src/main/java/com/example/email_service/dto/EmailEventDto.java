@@ -72,4 +72,14 @@ public class EmailEventDto {
         private String summary;
         private LocalDateTime processedAt;
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SendEmailRequest {
+        private String to;
+        private String subject;
+        private String body;
+        private String replyToMessageId; // optional
+    }
 }

@@ -18,18 +18,21 @@ import {
   Link as LinkIcon,
   User,
   RefreshCw,
+  Plus,
 } from "lucide-react"
 
 interface SidebarProps {
   activeItem?: string
   inboxCount?: number
   onSelectItem?: (item: string) => void
+  onComposeClick?: () => void
 }
 
 export default function Sidebar({
   activeItem = "inbox",
   inboxCount = 0,
   onSelectItem,
+  onComposeClick,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
@@ -140,6 +143,30 @@ export default function Sidebar({
               <ChevronRight className="w-4 h-4" />
             ) : (
               <ChevronLeft className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+
+        {/* Compose Button */}
+        <div style={{ padding: "0 var(--space-sm)" }}>
+          <button
+            onClick={onComposeClick}
+            className="flex items-center gap-3 rounded-2xl shadow-md transition-all duration-200 hover:shadow-lg active:scale-95 cursor-pointer"
+            style={{
+              width: collapsed ? "40px" : "100%",
+              height: "40px",
+              padding: collapsed ? "0" : "0 16px",
+              justifyContent: "center",
+              background: "#FFFFFF",
+              color: "#1F2937",
+              border: "1px solid #E5E7EB",
+              margin: "8px 0",
+            }}
+            title="Soạn thư"
+          >
+            <Plus className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+            {!collapsed && (
+              <span className="text-sm font-semibold text-gray-700">Soạn thư</span>
             )}
           </button>
         </div>

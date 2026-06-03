@@ -85,7 +85,7 @@ public class Email {
     private List<Attachment> attachments = new ArrayList<>();
 
     public enum EmailLabel {
-        PENDING, SPAM, IMPORTANT, NORMAL, WORK, PERSONAL
+        PENDING, SPAM, IMPORTANT, NORMAL, WORK, PERSONAL, SENT
     }
 
     public enum EmailCategory {
