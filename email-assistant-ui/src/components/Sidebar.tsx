@@ -85,7 +85,7 @@ export default function Sidebar({
       `&redirect_uri=${redirectUri}` +
       `&response_type=code` +
       `&provider=google` +
-      `&scope=https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly`
+      `&scope=https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send`
     window.location.href = authUrl
   }
 
