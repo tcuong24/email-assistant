@@ -20,6 +20,7 @@ import org.springframework.web.client.RestTemplate;
 import com.example.email_service.dto.EmailEventDto.AiResultEvent;
 import com.example.email_service.dto.EmailEventDto.EmailReceivedEvent;
 import com.example.email_service.dto.EmailEventDto.ReceiveEmailRequest;
+import com.example.email_service.dto.EmailEventDto.EmailNotification;
 import com.example.email_service.entity.Email;
 import com.example.email_service.entity.NylasConnection;
 import com.example.email_service.repository.EmailRepository;
@@ -37,6 +38,7 @@ public class EmailService {
     private final EmailRepository emailRepository;
     private final NylasConnectionRepository nylasConnectionRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final NotificationService notificationService;
 
     @Async
     public void syncHistoricalEmails(String grantId, Long userId, String nylasApiKey, String nylasApiUrl) {
@@ -80,8 +82,11 @@ public class EmailService {
                         String threadId = (String) msg.get("thread_id");
                         boolean unread = msg.get("unread") != null ? (boolean) msg.get("unread") : true;
                         boolean isRead = !unread;
-                        // Tận dụng hàm receiveEmail đã viết sẵn để lưu DB và publish lên Kafka cho AI
-                        // xử lý
+
+                        List<String> folders = (List<String>) msg.get("folders");
+                        String categoryStr = extractCategory(folders).name();
+
+                        // Tận dụng hàm receiveEmail đã viết sẵn để lưu DB
                         ReceiveEmailRequest request = new ReceiveEmailRequest();
                         request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
                         request.setBody(body != null ? body : "");
@@ -92,6 +97,7 @@ public class EmailService {
                         request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
                         request.setThreadId(threadId);
                         request.setRead(isRead);
+                        request.setCategory(categoryStr);
 
                         this.receiveEmail(request, userId);
                     }
@@ -134,6 +140,7 @@ public class EmailService {
                 .threadId(request.getThreadId())
                 .isRead(request.isRead())
                 .label(Email.EmailLabel.PENDING)
+                .category(request.getCategory() != null ? Email.EmailCategory.valueOf(request.getCategory()) : Email.EmailCategory.PRIMARY)
                 .snippet(request.getSnippet())
                 .hasAttachments(request.isHasAttachments())
                 .receivedAt(request.getReceivedAt() != null ? request.getReceivedAt() : LocalDateTime.now())
@@ -141,25 +148,7 @@ public class EmailService {
 
         email = emailRepository.save(email);
 
-        // Publish event lên Kafka — AI service sẽ consume
-        EmailReceivedEvent event = EmailReceivedEvent.builder()
-                .emailId(email.getId())
-                .fromAddress(email.getFromAddress())
-                .subject(email.getSubject())
-                .body(email.getBody())
-                .userId(email.getUserId())
-                .fromName(email.getFromName())
-                .threadId(email.getThreadId())
-                .isRead(email.isRead())
-                .snippet(email.getSnippet())
-                .hasAttachments(email.isHasAttachments())
-                .receivedAt(email.getReceivedAt() != null ? email.getReceivedAt().toString() : null)
-                .build();
-
-        kafkaTemplate.send(emailReceivedTopic,
-                String.valueOf(email.getId()), event);
-
-        log.info("Email {} nhận và publish lên Kafka", email.getId());
+        log.info("Email {} nhận thành công (chờ phân tích AI khi xem thư)", email.getId());
         return email;
     }
 
@@ -174,6 +163,20 @@ public class EmailService {
             emailRepository.save(email);
             log.info("Email {} cập nhật AI result: {}",
                     email.getId(), event.getLabel());
+
+            // Push notification qua WebSocket
+            try {
+                EmailNotification notification = EmailNotification.builder()
+                        .emailId(email.getId())
+                        .subject(email.getSubject())
+                        .label(email.getLabel().name())
+                        .summary(email.getSummary())
+                        .processedAt(LocalDateTime.now())
+                        .build();
+                notificationService.notifyEmailProcessed(email.getUserId(), notification);
+            } catch (Exception e) {
+                log.error("Lỗi gửi thông báo WebSocket cho email {}: {}", email.getId(), e.getMessage());
+            }
         });
     }
 
@@ -181,9 +184,50 @@ public class EmailService {
         return emailRepository.findByUserIdOrderByReceivedAtDesc(userId);
     }
 
+    public List<Email> getEmailsByUserAndCategory(Long userId, Email.EmailCategory category) {
+        return emailRepository.findByUserIdAndCategoryOrderByReceivedAtDesc(userId, category);
+    }
+
     public Email getEmailById(Long id, Long userId) {
         return emailRepository.findById(id)
                 .filter(e -> e.getUserId().equals(userId))
                 .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
+    }
+
+    @Transactional
+    public Email triggerAiAnalysis(Long emailId, Long userId) {
+        Email email = emailRepository.findById(emailId)
+                .filter(e -> e.getUserId().equals(userId))
+                .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
+
+        if (email.getLabel() == Email.EmailLabel.PENDING && (email.getSummary() == null || email.getSummary().isEmpty())) {
+            EmailReceivedEvent event = EmailReceivedEvent.builder()
+                    .emailId(email.getId())
+                    .fromAddress(email.getFromAddress())
+                    .subject(email.getSubject())
+                    .body(email.getBody())
+                    .userId(email.getUserId())
+                    .fromName(email.getFromName())
+                    .threadId(email.getThreadId())
+                    .isRead(email.isRead())
+                    .snippet(email.getSnippet())
+                    .hasAttachments(email.isHasAttachments())
+                    .receivedAt(email.getReceivedAt() != null ? email.getReceivedAt().toString() : null)
+                    .category(email.getCategory().name())
+                    .build();
+
+            kafkaTemplate.send(emailReceivedTopic, String.valueOf(email.getId()), event);
+            log.info("Yêu cầu phân tích AI cho Email {} đã được gửi lên Kafka", email.getId());
+        }
+        return email;
+    }
+
+    public Email.EmailCategory extractCategory(List<String> folders) {
+        if (folders == null) return Email.EmailCategory.PRIMARY;
+        if (folders.contains("CATEGORY_PROMOTIONS")) return Email.EmailCategory.PROMOTIONS;
+        if (folders.contains("CATEGORY_SOCIAL"))     return Email.EmailCategory.SOCIAL;
+        if (folders.contains("CATEGORY_UPDATES"))    return Email.EmailCategory.UPDATES;
+        if (folders.contains("CATEGORY_FORUMS"))     return Email.EmailCategory.FORUMS;
+        return Email.EmailCategory.PRIMARY;
     }
 }

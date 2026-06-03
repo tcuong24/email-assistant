@@ -22,7 +22,9 @@ export type EmailData = {
     userId:string;
     receivedAt: string
     updatedAt: string
+    category?: string
 }
 export const getEmails    = ()     => api.get('/emails')
 export const getEmail     = (id:number)   => api.get(`/emails/${id}`)
 export const receiveEmail = (data:EmailData) => api.post('/emails/receive', data)
+export const analyzeEmail = (id: number | string) => api.post(`/emails/${id}/analyze`)

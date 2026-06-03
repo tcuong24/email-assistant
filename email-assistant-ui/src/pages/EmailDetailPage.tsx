@@ -1,6 +1,7 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getEmail } from '../api/emailApi'
+import { getEmail, analyzeEmail } from '../api/emailApi'
 import Sidebar from '../components/Sidebar'
 import LabelBadge from '../components/LabelBadge'
 import {
@@ -21,6 +22,15 @@ export default function EmailDetailPage() {
     queryKey: ['email', id],
     queryFn: () => getEmail(Number(id)).then(r => r.data),
   })
+
+  // Gọi API phân tích AI nếu email ở trạng thái PENDING khi xem chi tiết
+  useEffect(() => {
+    if (email && email.label === 'PENDING') {
+      analyzeEmail(Number(id)).catch(err => {
+        console.error("Failed to trigger AI analysis:", err)
+      })
+    }
+  }, [email, id])
 
   const getAvatarInitials = (address: string) => {
     if (!address) return "?"

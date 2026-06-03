@@ -17,6 +17,7 @@ export interface Email {
   isRead?: boolean;
   threadCount?: number; 
   status?: string;
+  category?: string;
 }
 
 interface EmailSectionProps {

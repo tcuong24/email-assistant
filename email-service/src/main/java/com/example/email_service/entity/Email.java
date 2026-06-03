@@ -45,6 +45,10 @@ public class Email {
     @Builder.Default
     private EmailLabel label = EmailLabel.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private EmailCategory category = EmailCategory.PRIMARY;
+
     @Column(columnDefinition = "TEXT")
     private String summary;
 
@@ -73,5 +77,9 @@ public class Email {
 
     public enum EmailLabel {
         PENDING, SPAM, IMPORTANT, NORMAL, WORK, PERSONAL
+    }
+
+    public enum EmailCategory {
+        PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
     }
 }

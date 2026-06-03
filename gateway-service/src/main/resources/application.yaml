@@ -38,6 +38,11 @@ spring:
           filters:
             - AuthFilter
 
+        - id: email-service-ws
+          uri: ${EMAIL_SERVICE_URI:http://email-service:8084}
+          predicates:
+            - Path=/ws/**
+
         # ── analytics-service ────────────────────────────────────
         - id: analytics-service
           uri: ${ANALYTICS_SERVICE_URI:http://analytics-service:8083}

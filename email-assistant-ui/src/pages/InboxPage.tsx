@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getEmails } from '../api/emailApi'
+import { getEmails, analyzeEmail } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import EmailSection from '../components/EmailSection'
 import type { Email } from '../components/EmailSection'
 import EmailBodyRenderer from '../components/EmailBodyRenderer'
+import { useAuth } from '../store/authStore'
+import { useWebSocket } from '../hooks/useWebSocket'
 import {
   Search,
   Plus,
@@ -17,19 +19,48 @@ import {
   RefreshCw,
   MailOpen,
   X,
+  Inbox,
+  Tag,
+  Users,
+  Bell,
+  MessageSquare,
 } from 'lucide-react'
+
+const CATEGORY_TABS = [
+  { key: 'PRIMARY', label: 'Chính', icon: Inbox },
+  { key: 'PROMOTIONS', label: 'Quảng cáo', icon: Tag },
+  { key: 'SOCIAL', label: 'Mạng xã hội', icon: Users },
+  { key: 'UPDATES', label: 'Cập nhật', icon: Bell },
+  { key: 'FORUMS', label: 'Diễn đàn', icon: MessageSquare },
+]
 
 export default function InboxPage() {
   const [activeCategory, setActiveCategory] = useState("inbox")
   const [searchQuery, setSearchQuery] = useState("")
   const [filterTab, setFilterTab] = useState("all")
   const [selectedEmailId, setSelectedEmailId] = useState<string | number | null>(null)
+  const [activeTab, setActiveTab] = useState("PRIMARY")
+
+  const { user } = useAuth()
+  useWebSocket(user?.id)
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['emails'],
     queryFn: () => getEmails().then(r => r.data),
-    refetchInterval: 10000,
+    refetchInterval: 300000,
   })
+
+  // Gọi API phân tích AI khi chọn một email đang ở trạng thái PENDING
+  useEffect(() => {
+    if (selectedEmailId) {
+      const email = data?.find(e => e.id === selectedEmailId);
+      if (email && email.label === 'PENDING') {
+        analyzeEmail(selectedEmailId).catch(err => {
+          console.error("Failed to trigger AI analysis:", err);
+        });
+      }
+    }
+  }, [selectedEmailId, data]);
 
   const getThreadedEmails = (rawEmails: Email[]) => {
     if (!rawEmails) return [];
@@ -67,7 +98,8 @@ export default function InboxPage() {
     const labelUpper = email.label?.toUpperCase()
 
     if (activeCategory === "inbox") {
-      matchesCategory = labelUpper !== "SPAM" && labelUpper !== "DELETED"
+      const emailCategory = (email.category || "PRIMARY").toUpperCase()
+      matchesCategory = labelUpper !== "SPAM" && labelUpper !== "DELETED" && emailCategory === activeTab
     } else if (activeCategory === "important") {
       matchesCategory = labelUpper === "IMPORTANT"
     } else if (activeCategory === "sent") {
@@ -362,6 +394,39 @@ export default function InboxPage() {
               </div>
             </div>
           </>
+        )}
+
+        {/* ── Category Tabs (Gmail-style) ── */}
+        {activeCategory === "inbox" && (
+          <div 
+            className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-shrink-0" 
+            style={{ 
+              padding: "8px 16px", 
+              borderBottom: "1px solid var(--border)",
+              background: "var(--bg-panel)" 
+            }}
+          >
+            {CATEGORY_TABS.map(tab => {
+              const Icon = tab.icon
+              const isActive = activeTab === tab.key
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 whitespace-nowrap cursor-pointer"
+                  style={{
+                    background: isActive ? "var(--btn-dark)" : "transparent",
+                    color: isActive ? "#FFFFFF" : "var(--text-secondary)",
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#F3F4F6" }}
+                  onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent" }}
+                >
+                  <Icon className="w-3.5 h-3.5" style={{ color: isActive ? "#FFFFFF" : "var(--text-secondary)" }} />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
         )}
 
         {/* ── Email List — Scrollable ── */}

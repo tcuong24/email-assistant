@@ -25,6 +25,7 @@ public class EmailEventDto {
         private String fromName;
         private String threadId;
         private boolean isRead;
+        private String category; // PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
     }
 
     // Gửi lên topic email.received
@@ -44,6 +45,7 @@ public class EmailEventDto {
         private String fromName;
         private String threadId;
         private boolean isRead;
+        private String category; // PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
     }
 
     // Nhận từ topic ai.result

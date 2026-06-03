@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.example.email_service.entity.Email.EmailCategory;
 
 import com.example.email_service.dto.EmailEventDto.ReceiveEmailRequest;
 import com.example.email_service.entity.Email;
@@ -36,10 +38,14 @@ public class EmailController {
                 .body(emailService.receiveEmail(request, userId));
     }
 
-    // Lấy danh sách email của user
+    // Lấy danh sách email của user (có thể lọc theo category)
     @GetMapping
     public ResponseEntity<List<Email>> getEmails(
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestParam(required = false) EmailCategory category) {
+        if (category != null) {
+            return ResponseEntity.ok(emailService.getEmailsByUserAndCategory(userId, category));
+        }
         return ResponseEntity.ok(emailService.getEmailsByUser(userId));
     }
 
@@ -49,6 +55,14 @@ public class EmailController {
             @PathVariable Long id,
             @RequestHeader("X-User-Id") Long userId) {
         return ResponseEntity.ok(emailService.getEmailById(id, userId));
+    }
+
+    // Phân tích email bằng AI khi click xem thư
+    @PostMapping("/{id}/analyze")
+    public ResponseEntity<Email> analyzeEmail(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(emailService.triggerAiAnalysis(id, userId));
     }
 
     // ── NYLAS INTEGRATION ──────────────────────────────────────────────
@@ -150,6 +164,9 @@ public class EmailController {
 
                         Long userId = emailService.findUserIdByGrantId(grantId);
                         if (userId != null) {
+                            List<String> folders = (List<String>) object.get("folders");
+                            String categoryStr = emailService.extractCategory(folders).name();
+
                             ReceiveEmailRequest request = new ReceiveEmailRequest();
                             request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
                             request.setBody(body != null ? body : "");
@@ -159,6 +176,7 @@ public class EmailController {
                             request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
                             request.setThreadId(threadId);
                             request.setRead(isRead);
+                            request.setCategory(categoryStr);
                             emailService.receiveEmail(request, userId);
                         }
                     }
