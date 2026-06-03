@@ -1,7 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getEmail, analyzeEmail } from '../api/emailApi'
+import { getEmail, analyzeEmail, getThreadEmails } from '../api/emailApi'
 import Sidebar from '../components/Sidebar'
 import LabelBadge from '../components/LabelBadge'
 import {
@@ -10,6 +10,7 @@ import {
   Star,
   CornerUpRight,
   ArrowLeft,
+  Paperclip,
 } from 'lucide-react'
 import { stripHtml } from '@/lib/utils'
 import EmailBodyRenderer from '../components/EmailBodyRenderer'
@@ -31,6 +32,43 @@ export default function EmailDetailPage() {
       })
     }
   }, [email, id])
+
+  const [expandedEmailIds, setExpandedEmailIds] = useState<{ [key: string]: boolean }>({})
+
+  // Lấy tất cả email trong cùng luồng
+  const { data: threadEmails, isLoading: isThreadLoading } = useQuery({
+    queryKey: ['threadEmails', email?.threadId],
+    queryFn: () => {
+      if (email?.threadId) {
+        return getThreadEmails(email.threadId).then(r => r.data)
+      }
+      return Promise.resolve([])
+    },
+    enabled: !!email?.threadId,
+  })
+
+  const displayEmails = threadEmails && threadEmails.length > 0 ? threadEmails : (email ? [email] : [])
+
+  useEffect(() => {
+    if (displayEmails.length > 0) {
+      const initialExpanded: { [key: string]: boolean } = {}
+      displayEmails.forEach((emailItem, index) => {
+        if (index === displayEmails.length - 1) {
+          initialExpanded[emailItem.id] = true
+        } else {
+          initialExpanded[emailItem.id] = false
+        }
+      })
+      setExpandedEmailIds(initialExpanded)
+    }
+  }, [threadEmails, email])
+
+  const toggleEmailExpand = (emailId: string | number) => {
+    setExpandedEmailIds(prev => ({
+      ...prev,
+      [emailId]: !prev[emailId]
+    }))
+  }
 
   const getAvatarInitials = (address: string) => {
     if (!address) return "?"
@@ -135,124 +173,186 @@ export default function EmailDetailPage() {
           </div>
         </div>
 
-        {/* Email Body */}
+        {/* Email Body & Thread Stack */}
         <div className="flex-1 overflow-y-auto scrollbar-thin" style={{ padding: "var(--space-xl) var(--space-xl)" }}>
-          <div className="max-w-3xl mx-auto">
-            {/* Sender Header */}
-            <div className="flex items-start gap-4 mb-6">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                style={{
-                  background: getAvatarColor(email?.fromAddress || ""),
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                }}
-              >
-                {getAvatarInitials(email?.fromAddress || "")}
+          {isThreadLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: "var(--accent-primary)", borderTopColor: "transparent" }} />
+                <span className="text-xs text-gray-500">Đang tải cuộc trò chuyện...</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline justify-between gap-4">
-                  <h1
-                    className="text-lg font-bold truncate"
-                    style={{ color: "var(--text-primary)", margin: 0 }}
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto flex flex-col gap-4">
+              {displayEmails.map((emailItem, index) => {
+                const isExpanded = expandedEmailIds[emailItem.id]
+                const isLatest = index === displayEmails.length - 1
+                const replies = emailItem.suggestedReplies ? emailItem.suggestedReplies.split('||') : []
+
+                return (
+                  <div
+                    key={emailItem.id}
+                    className="border rounded-xl overflow-hidden transition-all duration-200"
+                    style={{
+                      borderColor: "var(--border-color)",
+                      boxShadow: isExpanded ? "0 4px 12px rgba(0,0,0,0.05)" : "none",
+                    }}
                   >
-                    {email?.fromAddress}
-                  </h1>
-                  <span className="text-xs font-medium flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
-                    {email?.receivedAt && new Date(email.receivedAt).toLocaleDateString('vi-VN', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-                <h2
-                  className="text-base font-semibold mt-1.5"
-                  style={{ color: "var(--text-primary)", margin: 0 }}
-                >
-                  {email?.subject}
-                </h2>
-                <p className="text-[11px] mt-1.5 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
-                  <span>To: me</span>
-                  {email?.label && (
-                    <>
-                      <span>•</span>
-                      <LabelBadge label={email.label} />
-                    </>
-                  )}
-                </p>
-              </div>
+                    {/* Collapsed Header Bar */}
+                    {!isExpanded ? (
+                      <div
+                        onClick={() => toggleEmailExpand(emailItem.id)}
+                        className="flex items-center justify-between cursor-pointer select-none transition-colors"
+                        style={{
+                          padding: "12px 16px",
+                          background: "#F3F4F6", // light gray background for read/older collapsed emails
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#EBF0F6"
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#F3F4F6"
+                        }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            style={{ background: getAvatarColor(emailItem.fromAddress) }}
+                          >
+                            {getAvatarInitials(emailItem.fromAddress)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-xs font-bold text-gray-700 truncate" style={{ maxWidth: 120 }}>
+                                {emailItem.fromName || emailItem.fromAddress.split("@")[0]}
+                              </span>
+                              <span className="text-xs text-gray-500 truncate">
+                                {emailItem.snippet || (emailItem.body ? emailItem.body.replace(/<[^>]*>/g, '').slice(0, 80) : "(Không có nội dung)")}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {emailItem.hasAttachments && (
+                            <Paperclip className="w-3.5 h-3.5 text-gray-400" />
+                          )}
+                          <span className="text-[11px] text-gray-500">
+                            {new Date(emailItem.receivedAt).toLocaleDateString('vi-VN', {
+                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Expanded View */
+                      <div style={{ background: "#FFFFFF", padding: "16px 20px" }}>
+                        {/* Header */}
+                        <div
+                          className="flex items-start gap-4 mb-4 cursor-pointer"
+                          onClick={() => toggleEmailExpand(emailItem.id)}
+                        >
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            style={{ background: getAvatarColor(emailItem.fromAddress) }}
+                          >
+                            {getAvatarInitials(emailItem.fromAddress)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline justify-between gap-4">
+                              <h2 className="text-sm font-bold truncate text-gray-800 m-0">
+                                {emailItem.fromName ? `${emailItem.fromName} <${emailItem.fromAddress}>` : emailItem.fromAddress}
+                              </h2>
+                              <span className="text-[11px] text-gray-500 flex-shrink-0">
+                                {new Date(emailItem.receivedAt).toLocaleString('vi-VN', {
+                                  day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-400 mt-1 mb-0 flex gap-2">
+                              <span>To: me</span>
+                              {emailItem.label && (
+                                <>
+                                  <span>•</span>
+                                  <LabelBadge label={emailItem.label} />
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Subject */}
+                        <h3 className="text-sm font-bold text-gray-800 mb-3 border-b border-gray-100 pb-2">
+                          {emailItem.subject}
+                        </h3>
+
+                        {/* AI Summary */}
+                        {emailItem.summary && (
+                          <div
+                            className="rounded-xl mb-4"
+                            style={{ padding: "12px 16px", background: "linear-gradient(135deg, #EEF2FF, #F5F3FF)", border: "1px solid #E0E7FF" }}
+                          >
+                            <p className="text-[11px] font-semibold mb-1" style={{ color: "#6366F1" }}>✨ AI tóm tắt</p>
+                            <p className="text-xs leading-relaxed m-0" style={{ color: "#3730A3" }}>{emailItem.summary}</p>
+                          </div>
+                        )}
+
+                        {/* Body */}
+                        <div className="text-sm text-gray-800 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                          <EmailBodyRenderer body={emailItem.body} />
+                        </div>
+
+                        {/* Attachments */}
+                        {emailItem.attachments && emailItem.attachments.length > 0 && (
+                          <div className="mt-4 border-t border-gray-100 pt-3">
+                            <p className="text-xs font-semibold mb-2 text-gray-500">
+                              📎 Đính kèm ({emailItem.attachments.length})
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {emailItem.attachments.map((att, idx) => (
+                                <a
+                                  key={idx}
+                                  href={att.r2Url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-white hover:bg-gray-50 transition-colors no-underline text-gray-700"
+                                >
+                                  <Paperclip className="w-3.5 h-3.5 text-gray-400" />
+                                  <div className="text-left">
+                                    <p className="font-semibold truncate max-w-[150px] m-0">{att.filename}</p>
+                                    <p className="text-[10px] text-gray-400 m-0">{(att.size / 1024).toFixed(1)} KB</p>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Suggested Replies */}
+                        {isLatest && replies.length > 0 && (
+                          <div className="mt-4 border-t border-gray-100 pt-3">
+                            <p className="text-xs font-semibold mb-2 text-gray-500">💬 Gợi ý trả lời</p>
+                            <div className="flex flex-col gap-2">
+                              {replies.map((reply, i) => (
+                                <div
+                                  key={i}
+                                  className="text-xs cursor-pointer transition-all duration-200 hover:shadow-sm"
+                                  style={{ padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", background: "var(--bg-panel)" }}
+                                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent-primary)"; (e.currentTarget as HTMLDivElement).style.background = "#F8FAFF" }}
+                                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-color)"; (e.currentTarget as HTMLDivElement).style.background = "var(--bg-panel)" }}
+                                >
+                                  {reply.trim()}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-
-            {/* AI Summary */}
-            {email?.summary && (
-              <div
-                className="rounded-xl mb-5"
-                style={{
-                  padding: "16px 20px",
-                  background: "linear-gradient(135deg, #EEF2FF, #F5F3FF)",
-                  border: "1px solid #E0E7FF",
-                }}
-              >
-                <p className="text-xs font-semibold mb-1.5" style={{ color: "#6366F1" }}>
-                  ✨ AI tóm tắt
-                </p>
-                <p className="text-sm leading-relaxed" style={{ color: "#3730A3" }}>
-                  {email.summary}
-                </p>
-              </div>
-            )}
-
-            <hr style={{ border: "none", borderTop: "1px solid #F3F4F6", margin: "24px 0" }} />
-
-            {/* Body */}
-            <div
-              className="text-sm"
-              style={{
-                padding: "var(--space-lg)",
-                background: "#FAFBFC",
-                borderRadius: 12,
-                border: "1px solid #F3F4F6",
-              }}
-            >
-              <EmailBodyRenderer body={email?.body} />
-            </div>
-
-            {/* Suggested Replies */}
-            {replies.length > 0 && (
-              <div className="mt-8">
-                <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-secondary)" }}>
-                  💬 Gợi ý trả lời
-                </p>
-                <div className="flex flex-col gap-2">
-                  {replies.map((reply, i) => (
-                    <div
-                      key={i}
-                      className="text-sm cursor-pointer transition-all duration-200 hover:shadow-sm"
-                      style={{
-                        padding: "12px 16px",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: 10,
-                        color: "var(--text-primary)",
-                        background: "var(--bg-panel)",
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent-primary)"
-                        ;(e.currentTarget as HTMLDivElement).style.background = "#F8FAFF"
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-color)"
-                        ;(e.currentTarget as HTMLDivElement).style.background = "var(--bg-panel)"
-                      }}
-                    >
-                      {reply.trim()}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>

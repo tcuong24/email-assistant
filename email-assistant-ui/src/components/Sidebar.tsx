@@ -1,7 +1,8 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../store/authStore"
 import { logout } from "../api/authApi"
+import { getNylasStatus, syncEmails } from "../api/emailApi"
 import {
   Inbox,
   Star,
@@ -16,6 +17,7 @@ import {
   LogOut,
   Link as LinkIcon,
   User,
+  RefreshCw,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -30,8 +32,39 @@ export default function Sidebar({
   onSelectItem,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const { user, clearAuth } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (user) {
+      getNylasStatus()
+        .then(response => {
+          setIsConnected(response.data.connected)
+        })
+        .catch(err => {
+          console.error("Lỗi kiểm tra trạng thái Nylas:", err)
+        })
+    }
+  }, [user])
+
+  const handleSyncEmails = async () => {
+    if (isSyncing) return
+    setIsSyncing(true)
+    try {
+      await syncEmails()
+      // Giả lập 2s xoay icon để hiển thị tiến trình, vì đồng bộ ở backend chạy bất đồng bộ
+      setTimeout(() => {
+        setIsSyncing(false)
+        // Refresh trang để lấy dữ liệu mới
+        window.location.reload()
+      }, 2000)
+    } catch (err) {
+      console.error("Lỗi đồng bộ email:", err)
+      setIsSyncing(false)
+    }
+  }
 
   const handleLogout = async () => {
     try { await logout() } catch {}
@@ -228,21 +261,49 @@ export default function Sidebar({
           }}
         />
 
-        {/* Connect Email */}
-        <button
-          onClick={handleConnectEmail}
-          className="flex items-center gap-2.5 rounded-lg transition-all duration-200 hover:bg-white/10"
-          style={{
-            padding: collapsed ? "10px" : "8px 12px",
-            justifyContent: collapsed ? "center" : "flex-start",
-          }}
-          title="Kết nối Email"
-        >
-          <LinkIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />
-          {!collapsed && (
-            <span className="text-xs font-medium text-blue-400">Kết nối Email</span>
-          )}
-        </button>
+        {/* Connect or Sync Email */}
+        {isConnected ? (
+          <button
+            onClick={handleSyncEmails}
+            disabled={isSyncing}
+            className={`flex items-center gap-2.5 rounded-lg transition-all duration-200 hover:bg-white/10 ${isSyncing ? "opacity-70 cursor-not-allowed" : ""}`}
+            style={{
+              padding: collapsed ? "10px" : "8px 12px",
+              justifyContent: collapsed ? "center" : "flex-start",
+              width: "100%",
+              border: "none",
+              background: "transparent",
+              cursor: isSyncing ? "not-allowed" : "pointer",
+            }}
+            title="Cập nhật Email"
+          >
+            <RefreshCw className={`w-4 h-4 text-emerald-400 flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
+            {!collapsed && (
+              <span className="text-xs font-medium text-emerald-400">
+                {isSyncing ? "Đang đồng bộ..." : "Cập nhật Email"}
+              </span>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={handleConnectEmail}
+            className="flex items-center gap-2.5 rounded-lg transition-all duration-200 hover:bg-white/10"
+            style={{
+              padding: collapsed ? "10px" : "8px 12px",
+              justifyContent: collapsed ? "center" : "flex-start",
+              width: "100%",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+            }}
+            title="Kết nối Email"
+          >
+            <LinkIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />
+            {!collapsed && (
+              <span className="text-xs font-medium text-blue-400">Kết nối Email</span>
+            )}
+          </button>
+        )}
 
         {/* User Info */}
         {user && (

@@ -25,6 +25,8 @@ import com.example.email_service.entity.Email;
 import com.example.email_service.entity.NylasConnection;
 import com.example.email_service.repository.EmailRepository;
 import com.example.email_service.repository.NylasConnectionRepository;
+import com.example.email_service.repository.AttachmentRepository;
+import com.example.email_service.entity.Attachment;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +41,14 @@ public class EmailService {
     private final NylasConnectionRepository nylasConnectionRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final NotificationService notificationService;
+    private final AttachmentRepository attachmentRepository;
+    private final CloudinaryService cloudinaryService;
+
+    @Value("${NYLAS_API_KEY:}")
+    private String nylasApiKey;
+
+    @Value("${NYLAS_API_URL:https://api.us.nylas.com}")
+    private String nylasApiUrl;
 
     @Async
     public void syncHistoricalEmails(String grantId, Long userId, String nylasApiKey, String nylasApiUrl) {
@@ -99,9 +109,13 @@ public class EmailService {
                         request.setRead(isRead);
                         request.setCategory(categoryStr);
 
-                        this.receiveEmail(request, userId);
+                        Email savedEmail = this.receiveEmail(request, userId);
+                        if (hasAttachments) {
+                            List<Map<String, Object>> attList = (List<Map<String, Object>>) msg.get("attachments");
+                            processAttachments(savedEmail, attList, grantId);
+                        }
                     }
-                    log.info("Hoàn tất đẩy {} email cũ lên hàng đợi xử lý AI cho userId {}", messages.size(), userId);
+                    log.info("Hoàn tất đồng bộ {} email cũ cho userId {}", messages.size(), userId);
                 }
             }
         } catch (Exception e) {
@@ -229,5 +243,78 @@ public class EmailService {
         if (folders.contains("CATEGORY_UPDATES"))    return Email.EmailCategory.UPDATES;
         if (folders.contains("CATEGORY_FORUMS"))     return Email.EmailCategory.FORUMS;
         return Email.EmailCategory.PRIMARY;
+    }
+
+    public String findGrantIdByUserId(Long userId) {
+        return nylasConnectionRepository.findById(userId)
+                .map(NylasConnection::getGrantId)
+                .orElse(null);
+    }
+
+    public List<Email> getEmailsByThread(String threadId, Long userId) {
+        if (threadId == null || threadId.isEmpty()) {
+            return List.of();
+        }
+        return emailRepository.findByThreadIdAndUserIdOrderByReceivedAtAsc(threadId, userId);
+    }
+
+    @Transactional
+    public void processAttachments(Email email, List<Map<String, Object>> attachmentsList, String grantId) {
+        if (attachmentsList == null || attachmentsList.isEmpty() || grantId == null || grantId.isEmpty()) {
+            return;
+        }
+
+        log.info("Processing {} attachments for emailId={}", attachmentsList.size(), email.getId());
+        for (Map<String, Object> att : attachmentsList) {
+            try {
+                String fileId = (String) att.get("id");
+                String filename = (String) att.get("filename");
+                String contentType = (String) att.get("content_type");
+                Long size = att.get("size") != null ? ((Number) att.get("size")).longValue() : 0L;
+
+                if (fileId == null || fileId.isEmpty()) continue;
+
+                // 1. Download file from Nylas
+                byte[] content = downloadNylasFile(grantId, fileId);
+                if (content == null || content.length == 0) {
+                    log.warn("Nylas file download returned empty content for fileId={}", fileId);
+                    continue;
+                }
+
+                // 2. Upload to Cloudinary
+                String fileKey = "attachments/" + email.getId() + "/" + fileId + "_" + (filename != null ? filename : "unnamed");
+                String r2Url = cloudinaryService.uploadFile(fileKey, content);
+
+                // 3. Save attachment metadata in DB
+                Attachment attachment = Attachment.builder()
+                        .filename(filename != null ? filename : "unnamed")
+                        .contentType(contentType)
+                        .size(size)
+                        .r2Url(r2Url)
+                        .email(email)
+                        .build();
+                attachmentRepository.save(attachment);
+                log.info("Saved attachment filename={}, r2Url={}", filename, r2Url);
+            } catch (Exception e) {
+                log.error("Failed to process attachment for emailId={}, error={}", email.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private byte[] downloadNylasFile(String grantId, String fileId) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setBearerAuth(nylasApiKey);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/files/" + fileId + "/download";
+            ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
+            if (response.getStatusCode() == HttpStatus.OK) {
+                return response.getBody();
+            }
+        } catch (Exception e) {
+            log.error("Failed to download Nylas file grantId={}, fileId={}, error={}", grantId, fileId, e.getMessage());
+        }
+        return null;
     }
 }

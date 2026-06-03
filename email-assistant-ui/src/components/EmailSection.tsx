@@ -1,5 +1,6 @@
 import { Paperclip, Star } from "lucide-react"
 import LabelBadge from "./LabelBadge"
+import type { Attachment } from "../api/emailApi"
 
 export interface Email {
   id: string | number
@@ -18,6 +19,7 @@ export interface Email {
   threadCount?: number; 
   status?: string;
   category?: string;
+  attachments?: Attachment[];
 }
 
 interface EmailSectionProps {

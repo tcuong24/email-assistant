@@ -65,6 +65,33 @@ public class EmailController {
         return ResponseEntity.ok(emailService.triggerAiAnalysis(id, userId));
     }
 
+    // Lấy trạng thái kết nối Nylas
+    @GetMapping("/nylas/status")
+    public ResponseEntity<Map<String, Boolean>> getNylasStatus(@RequestHeader("X-User-Id") Long userId) {
+        String grantId = emailService.findGrantIdByUserId(userId);
+        boolean connected = grantId != null && !grantId.isEmpty();
+        return ResponseEntity.ok(Map.of("connected", connected));
+    }
+
+    // Kích hoạt đồng bộ email
+    @PostMapping("/sync")
+    public ResponseEntity<?> syncEmails(@RequestHeader("X-User-Id") Long userId) {
+        String grantId = emailService.findGrantIdByUserId(userId);
+        if (grantId == null || grantId.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Hòm thư chưa được kết nối"));
+        }
+        emailService.syncHistoricalEmails(grantId, userId, nylasApiKey, nylasApiUrl);
+        return ResponseEntity.ok(Map.of("status", "success", "message", "Bắt đầu đồng bộ email"));
+    }
+
+    // Lấy tất cả email trong một luồng (thread)
+    @GetMapping("/thread/{threadId}")
+    public ResponseEntity<List<Email>> getThreadEmails(
+            @PathVariable String threadId,
+            @RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(emailService.getEmailsByThread(threadId, userId));
+    }
+
     // ── NYLAS INTEGRATION ──────────────────────────────────────────────
 
     @org.springframework.beans.factory.annotation.Value("${NYLAS_CLIENT_ID:}")
@@ -176,8 +203,10 @@ public class EmailController {
                             request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
                             request.setThreadId(threadId);
                             request.setRead(isRead);
-                            request.setCategory(categoryStr);
-                            emailService.receiveEmail(request, userId);
+                            Email savedEmail = emailService.receiveEmail(request, userId);
+                            if (hasAttachments && attachments != null) {
+                                emailService.processAttachments(savedEmail, (List<Map<String, Object>>) attachments, grantId);
+                            }
                         }
                     }
                 }
