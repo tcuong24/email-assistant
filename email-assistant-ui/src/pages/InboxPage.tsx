@@ -26,6 +26,7 @@ import {
   Bell,
   MessageSquare,
   Paperclip,
+  Send,
 } from 'lucide-react'
 
 const CATEGORY_TABS = [

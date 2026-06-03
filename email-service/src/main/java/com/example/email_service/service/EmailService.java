@@ -354,6 +354,9 @@ public class EmailService {
                     threadId = (String) dataMap.get("thread_id");
                 }
 
+                String plainBody = request.getBody() != null ? request.getBody().replaceAll("<[^>]*>", "") : "";
+                String snippet = plainBody.length() > 100 ? plainBody.substring(0, 100) : plainBody;
+
                 // Lưu vào database với nhãn SENT
                 Email email = Email.builder()
                         .fromAddress(userEmailFromGrantId(grantId))
@@ -365,7 +368,7 @@ public class EmailService {
                         .isRead(true)
                         .label(Email.EmailLabel.SENT)
                         .category(Email.EmailCategory.PRIMARY)
-                        .snippet(request.getBody() != null ? (request.getBody().replace(/<[^>]*>/g, "").length() > 100 ? request.getBody().replace(/<[^>]*>/g, "").substring(0, 100) : request.getBody().replace(/<[^>]*>/g, "")) : "")
+                        .snippet(snippet)
                         .hasAttachments(false)
                         .receivedAt(LocalDateTime.now())
                         .build();
