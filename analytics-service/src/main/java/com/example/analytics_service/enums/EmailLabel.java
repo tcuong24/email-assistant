@@ -7,5 +7,8 @@ public enum EmailLabel   {
     NORMAL,
     WORK,
     PERSONAL,
-    TOTAL
+    TOTAL,
+    URGENT,
+    SENT,
+    DRAFT
 }

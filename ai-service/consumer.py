@@ -3,9 +3,7 @@ import os
 import time
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
-from classifier import classify
-from summarizer import summarize
-from reply_suggester import suggest_replies
+from analyzer import analyze_email
 from producer import publish_ai_result
 
 KAFKA_SERVERS   = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
@@ -60,16 +58,24 @@ def start_consumer():
             email_id = data["emailId"]
             subject  = data.get("subject", "")
             body     = data.get("body", "")
+            user_id  = data.get("userId")
+            received_at = data.get("receivedAt")
 
             print(f"[Consumer] Xử lý email {email_id}: {subject[:50]}")
 
-            # Gọi Gemini
-            label   = classify(subject, body)
-            summary = summarize(subject, body) if label != "SPAM" else "Email spam."
-            replies = suggest_replies(subject, body) if label != "SPAM" else []
+            # Gọi Gemini (gộp trong 1 API call duy nhất)
+            analysis = analyze_email(subject, body)
+            label = analysis["label"]
+            summary = analysis["summary"]
+            replies = analysis["suggested_replies"]
+            action_items = analysis["action_items"]
 
             # Publish kết quả về email-service
-            publish_ai_result(email_id, label, summary, replies)
+            publish_ai_result(email_id, label, summary, replies, action_items, user_id, received_at)
+
+            # Delay 3s để tránh vượt quá RPM (15 RPM) của Gemini Free Tier khi xử lý batch email
+            time.sleep(3)
 
         except Exception as e:
             print(f"[Consumer] Lỗi xử lý email: {e}")
+            time.sleep(5)

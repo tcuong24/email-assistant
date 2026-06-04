@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getEmails, analyzeEmail, getThreadEmails, sendEmail } from '../api/emailApi'
+import { getEmails, getSentEmails, getDraftEmails, analyzeEmail, getThreadEmails, sendEmail } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import ComposeModal from '../components/ComposeModal'
@@ -47,9 +47,28 @@ export default function InboxPage() {
   const { user } = useAuth()
   useWebSocket(user?.id)
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['emails'],
+  // Query phụ để lấy tất cả email phục vụ đếm số lượng (inboxCount)
+  const { data: allEmails } = useQuery({
+    queryKey: ['allEmails'],
     queryFn: () => getEmails().then(r => r.data),
+    refetchInterval: 300000,
+  })
+
+  // Query chính động theo category
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ['emails', activeCategory, activeTab],
+    queryFn: () => {
+      if (activeCategory === "sent") {
+        return getSentEmails().then(r => r.data)
+      }
+      if (activeCategory === "drafts") {
+        return getDraftEmails().then(r => r.data)
+      }
+      if (activeCategory === "inbox") {
+        return getEmails(activeTab).then(r => r.data)
+      }
+      return getEmails().then(r => r.data)
+    },
     refetchInterval: 300000,
   })
 
@@ -140,7 +159,7 @@ export default function InboxPage() {
     setSelectedEmailId(null)
   }, [activeCategory, filterTab, searchQuery])
 
-  const inboxCount = data?.filter(email => email.label?.toUpperCase() !== "SPAM").length || 0
+  const inboxCount = allEmails?.filter(email => email.label?.toUpperCase() !== "SPAM").length || 0
 
   const getCategoryTitle = (category: string) => {
     switch (category) {
@@ -722,6 +741,21 @@ export default function InboxPage() {
                             >
                               <p className="text-[11px] font-semibold mb-1" style={{ color: "#6366F1" }}>✨ AI tóm tắt</p>
                               <p className="text-xs leading-relaxed m-0" style={{ color: "#3730A3" }}>{emailItem.summary}</p>
+                            </div>
+                          )}
+
+                          {/* AI Action Items */}
+                          {emailItem.actionItems && emailItem.actionItems.trim().length > 0 && (
+                            <div
+                              className="rounded-xl mb-4"
+                              style={{ padding: "12px 16px", background: "linear-gradient(135deg, #ECFDF5, #F0FDF4)", border: "1px solid #A7F3D0" }}
+                            >
+                              <p className="text-[11px] font-semibold mb-1" style={{ color: "#059669" }}>✅ Việc cần làm (AI trích xuất)</p>
+                              <ul className="text-xs leading-relaxed m-0 list-disc pl-4" style={{ color: "#065F46" }}>
+                                {emailItem.actionItems.split("||").map((item, idx) => (
+                                  <li key={idx} style={{ color: "#065F46" }}>{item.trim()}</li>
+                                ))}
+                              </ul>
                             </div>
                           )}
 

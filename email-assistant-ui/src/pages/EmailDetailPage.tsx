@@ -335,6 +335,21 @@ export default function EmailDetailPage() {
                           </div>
                         )}
 
+                        {/* AI Action Items */}
+                        {emailItem.actionItems && emailItem.actionItems.trim().length > 0 && (
+                          <div
+                            className="rounded-xl mb-4"
+                            style={{ padding: "12px 16px", background: "linear-gradient(135deg, #ECFDF5, #F0FDF4)", border: "1px solid #A7F3D0" }}
+                          >
+                            <p className="text-[11px] font-semibold mb-1" style={{ color: "#059669" }}>✅ Việc cần làm (AI trích xuất)</p>
+                            <ul className="text-xs leading-relaxed m-0 list-disc pl-4" style={{ color: "#065F46" }}>
+                              {emailItem.actionItems.split("||").map((item, idx) => (
+                                <li key={idx} style={{ color: "#065F46" }}>{item.trim()}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         {/* Body */}
                         <div className="text-sm text-gray-800 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
                           <EmailBodyRenderer body={emailItem.body} />

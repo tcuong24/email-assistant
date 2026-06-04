@@ -173,7 +173,9 @@ public class EmailService {
             email.setLabel(Email.EmailLabel.valueOf(event.getLabel()));
             email.setSummary(event.getSummary());
             email.setSuggestedReplies(
-                    String.join("||", event.getSuggestedReplies()));
+                    event.getSuggestedReplies() != null ? String.join("||", event.getSuggestedReplies()) : "");
+            email.setActionItems(
+                    event.getActionItems() != null ? String.join("||", event.getActionItems()) : "");
             emailRepository.save(email);
             log.info("Email {} cập nhật AI result: {}",
                     email.getId(), event.getLabel());
@@ -185,6 +187,7 @@ public class EmailService {
                         .subject(email.getSubject())
                         .label(email.getLabel().name())
                         .summary(email.getSummary())
+                        .actionItems(event.getActionItems())
                         .processedAt(LocalDateTime.now())
                         .build();
                 notificationService.notifyEmailProcessed(email.getUserId(), notification);
@@ -196,6 +199,14 @@ public class EmailService {
 
     public List<Email> getEmailsByUser(Long userId) {
         return emailRepository.findByUserIdOrderByReceivedAtDesc(userId);
+    }
+
+    public List<Email> getSentEmails(Long userId) {
+        return emailRepository.findByUserIdAndLabelOrderByReceivedAtDesc(userId, Email.EmailLabel.SENT);
+    }
+
+    public List<Email> getDraftEmails(Long userId) {
+        return emailRepository.findByUserIdAndLabelOrderByReceivedAtDesc(userId, Email.EmailLabel.DRAFT);
     }
 
     public List<Email> getEmailsByUserAndCategory(Long userId, Email.EmailCategory category) {

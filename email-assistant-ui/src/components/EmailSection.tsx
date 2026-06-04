@@ -79,7 +79,7 @@ const formatTime = (dateStr: string) => {
 }
 
 const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionProps) => {
-  const isUnread = email.isUnread !== undefined ? email.isUnread : (email.isRead !== undefined ? !email.isRead : email.status !== "READ");
+  const isUnread = email.isRead !== true ? true : false;
 
   // ─── Horizontal Layout (Full-width Gmail style) ───
   if (layoutMode === "horizontal") {

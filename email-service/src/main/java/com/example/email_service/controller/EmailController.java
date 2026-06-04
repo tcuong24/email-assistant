@@ -49,6 +49,18 @@ public class EmailController {
         return ResponseEntity.ok(emailService.getEmailsByUser(userId));
     }
 
+    // Lấy danh sách thư đã gửi (SENT)
+    @GetMapping("/sent")
+    public ResponseEntity<List<Email>> getSentEmails(@RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(emailService.getSentEmails(userId));
+    }
+
+    // Lấy danh sách thư nháp (DRAFT)
+    @GetMapping("/drafts")
+    public ResponseEntity<List<Email>> getDraftEmails(@RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(emailService.getDraftEmails(userId));
+    }
+
     // Lấy chi tiết 1 email
     @GetMapping("/{id}")
     public ResponseEntity<Email> getEmail(

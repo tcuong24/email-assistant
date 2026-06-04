@@ -24,5 +24,10 @@ EXPOSE 8080
 
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
-  "-XX:MaxRAMPercentage=75.0", \
+  "-XX:MaxRAMPercentage=50.0", \
+  "-XX:+UseSerialGC", \
+  "-XX:MaxMetaspaceSize=128m", \
+  "-XX:ReservedCodeCacheSize=64m", \
+  "-Xss256k", \
+  "-Duser.timezone=Asia/Ho_Chi_Minh", \
   "-jar", "app.jar"]

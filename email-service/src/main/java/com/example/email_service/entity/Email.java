@@ -77,6 +77,9 @@ public class Email {
     @Builder.Default
     private boolean isRead = false;
     
+    @Column(columnDefinition = "TEXT")
+    private String actionItems;
+    
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
@@ -85,7 +88,7 @@ public class Email {
     private List<Attachment> attachments = new ArrayList<>();
 
     public enum EmailLabel {
-        PENDING, SPAM, IMPORTANT, NORMAL, WORK, PERSONAL, SENT
+        PENDING, SPAM, IMPORTANT, NORMAL, WORK, PERSONAL, SENT, DRAFT, URGENT
     }
 
     public enum EmailCategory {

@@ -58,6 +58,7 @@ public class EmailEventDto {
         private String label; // SPAM / IMPORTANT / NORMAL
         private String summary;
         private List<String> suggestedReplies;
+        private List<String> actionItems;
     }
 
     // Gửi notification cho UI (via WebSocket)
@@ -70,6 +71,7 @@ public class EmailEventDto {
         private String subject;
         private String label;
         private String summary;
+        private List<String> actionItems;
         private LocalDateTime processedAt;
     }
 

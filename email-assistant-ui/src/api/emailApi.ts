@@ -17,6 +17,7 @@ export type Email = {
     label: string
     summary?: string
     suggestedReplies?: string
+    actionItems?: string
     userId: number | string
     receivedAt: string
     updatedAt?: string
@@ -32,7 +33,9 @@ export type Email = {
 
 export type EmailData = Email
 
-export const getEmails       = () => api.get<Email[]>('/emails')
+export const getEmails       = (category?: string) => api.get<Email[]>(category ? `/emails?category=${category}` : '/emails')
+export const getSentEmails   = () => api.get<Email[]>('/emails/sent')
+export const getDraftEmails  = () => api.get<Email[]>('/emails/drafts')
 export const getEmail        = (id: number | string) => api.get<Email>(`/emails/${id}`)
 export const receiveEmail    = (data: EmailData) => api.post<Email>('/emails/receive', data)
 export const analyzeEmail    = (id: number | string) => api.post<Email>(`/emails/${id}/analyze`)
