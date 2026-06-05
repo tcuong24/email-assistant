@@ -15,14 +15,14 @@ export default function DashboardPage() {
 
   const { data: emails, isLoading } = useQuery({
     queryKey: ['emails'],
-    queryFn: () => getEmails().then(r => r.data),
+    queryFn: () => getEmails(undefined, 0, 1000).then(r => r.data),
   })
 
   const stats = {
-    total: emails?.length || 0,
-    unread: emails?.filter(e => e.status !== 'READ').length || 0,
-    important: emails?.filter(e => e.label?.toUpperCase() === 'IMPORTANT').length || 0,
-    spam: emails?.filter(e => e.label?.toUpperCase() === 'SPAM').length || 0,
+    total: emails?.totalElements || 0,
+    unread: emails?.content?.filter(e => e.status !== 'READ').length || 0,
+    important: emails?.content?.filter(e => e.label?.toUpperCase() === 'IMPORTANT').length || 0,
+    spam: emails?.content?.filter(e => e.label?.toUpperCase() === 'SPAM').length || 0,
   }
 
   const statCards = [

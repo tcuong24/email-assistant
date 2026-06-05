@@ -3,6 +3,10 @@ package com.example.email_service.controller;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,25 +44,36 @@ public class EmailController {
 
     // Lấy danh sách email của user (có thể lọc theo category)
     @GetMapping
-    public ResponseEntity<List<Email>> getEmails(
+    public ResponseEntity<Page<Email>> getEmails(
             @RequestHeader("X-User-Id") Long userId,
-            @RequestParam(required = false) EmailCategory category) {
+            @RequestParam(required = false) EmailCategory category,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("receivedAt").descending());
         if (category != null) {
-            return ResponseEntity.ok(emailService.getEmailsByUserAndCategory(userId, category));
+            return ResponseEntity.ok(emailService.getEmailsByUserAndCategory(userId, category, pageable));
         }
-        return ResponseEntity.ok(emailService.getEmailsByUser(userId));
+        return ResponseEntity.ok(emailService.getEmailsByUser(userId, pageable));
     }
 
     // Lấy danh sách thư đã gửi (SENT)
     @GetMapping("/sent")
-    public ResponseEntity<List<Email>> getSentEmails(@RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(emailService.getSentEmails(userId));
+    public ResponseEntity<Page<Email>> getSentEmails(
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("receivedAt").descending());
+        return ResponseEntity.ok(emailService.getSentEmails(userId, pageable));
     }
 
     // Lấy danh sách thư nháp (DRAFT)
     @GetMapping("/drafts")
-    public ResponseEntity<List<Email>> getDraftEmails(@RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(emailService.getDraftEmails(userId));
+    public ResponseEntity<Page<Email>> getDraftEmails(
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("receivedAt").descending());
+        return ResponseEntity.ok(emailService.getDraftEmails(userId, pageable));
     }
 
     // Lấy chi tiết 1 email
@@ -203,6 +218,7 @@ public class EmailController {
                         }
 
                         String threadId = (String) object.get("thread_id");
+                        String messageId = (String) object.get("id");
                         boolean unread = object.get("unread") != null ? (boolean) object.get("unread") : true;
                         boolean isRead = !unread;
                         String snippet = (String) object.get("snippet");
@@ -222,6 +238,7 @@ public class EmailController {
                             request.setHasAttachments(hasAttachments);
                             request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
                             request.setThreadId(threadId);
+                            request.setMessageId(messageId);
                             request.setRead(isRead);
                             Email savedEmail = emailService.receiveEmail(request, userId);
                             if (hasAttachments && attachments != null) {

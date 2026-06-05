@@ -31,6 +31,11 @@ import com.example.email_service.entity.Attachment;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -58,7 +63,7 @@ public class EmailService {
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
-            String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages?limit=20";
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages?limit=50";
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
 
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
@@ -90,6 +95,7 @@ public class EmailService {
                         }
 
                         String threadId = (String) msg.get("thread_id");
+                        String messageId = (String) msg.get("id");
                         boolean unread = msg.get("unread") != null ? (boolean) msg.get("unread") : true;
                         boolean isRead = !unread;
 
@@ -106,6 +112,7 @@ public class EmailService {
                         request.setFromAddress(fromAddress != null ? fromAddress : "");
                         request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
                         request.setThreadId(threadId);
+                        request.setMessageId(messageId);
                         request.setRead(isRead);
                         request.setCategory(categoryStr);
 
@@ -145,6 +152,15 @@ public class EmailService {
     // Nhận email mới (từ webhook hoặc API giả lập)
     @Transactional
     public Email receiveEmail(ReceiveEmailRequest request, Long userId) {
+        // Kiểm tra trùng lặp qua messageId
+        if (request.getMessageId() != null && !request.getMessageId().isEmpty()) {
+            Optional<Email> existingEmail = emailRepository.findByMessageId(request.getMessageId());
+            if (existingEmail.isPresent()) {
+                log.info("Email với messageId={} đã tồn tại. Bỏ qua.", request.getMessageId());
+                return existingEmail.get();
+            }
+        }
+
         Email email = Email.builder()
                 .fromAddress(request.getFromAddress())
                 .subject(request.getSubject())
@@ -152,6 +168,7 @@ public class EmailService {
                 .userId(userId)
                 .fromName(request.getFromName())
                 .threadId(request.getThreadId())
+                .messageId(request.getMessageId())
                 .isRead(request.isRead())
                 .label(Email.EmailLabel.PENDING)
                 .category(request.getCategory() != null ? Email.EmailCategory.valueOf(request.getCategory()) : Email.EmailCategory.PRIMARY)
@@ -160,10 +177,38 @@ public class EmailService {
                 .receivedAt(request.getReceivedAt() != null ? request.getReceivedAt() : LocalDateTime.now())
                 .build();
 
-        email = emailRepository.save(email);
+        final Email savedEmail = emailRepository.save(email);
+        log.info("Email {} nhận thành công (chờ phân tích AI khi xem thư)", savedEmail.getId());
 
-        log.info("Email {} nhận thành công (chờ phân tích AI khi xem thư)", email.getId());
-        return email;
+        // Gửi thông báo WebSocket ngay lập tức (sau khi commit transaction để tránh tranh chấp dữ liệu)
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sendNewEmailNotification(savedEmail);
+                }
+            });
+        } else {
+            sendNewEmailNotification(savedEmail);
+        }
+
+        return savedEmail;
+    }
+
+    private void sendNewEmailNotification(Email email) {
+        try {
+            EmailNotification notification = EmailNotification.builder()
+                    .emailId(email.getId())
+                    .subject(email.getSubject())
+                    .label(email.getLabel().name()) // PENDING
+                    .summary("Đang chờ phân tích...")
+                    .processedAt(LocalDateTime.now())
+                    .build();
+            notificationService.notifyEmailProcessed(email.getUserId(), notification);
+            log.info("Đã gửi thông báo email mới tức thời cho emailId={} qua WebSocket", email.getId());
+        } catch (Exception e) {
+            log.error("Lỗi gửi thông báo WebSocket cho email mới {}: {}", email.getId(), e.getMessage());
+        }
     }
 
     // Cập nhật kết quả AI (gọi từ Kafka consumer)
@@ -197,16 +242,32 @@ public class EmailService {
         });
     }
 
+    public Page<Email> getEmailsByUser(Long userId, Pageable pageable) {
+        return emailRepository.findByUserIdOrderByReceivedAtDesc(userId, pageable);
+    }
+
     public List<Email> getEmailsByUser(Long userId) {
         return emailRepository.findByUserIdOrderByReceivedAtDesc(userId);
+    }
+
+    public Page<Email> getSentEmails(Long userId, Pageable pageable) {
+        return emailRepository.findByUserIdAndLabelOrderByReceivedAtDesc(userId, Email.EmailLabel.SENT, pageable);
     }
 
     public List<Email> getSentEmails(Long userId) {
         return emailRepository.findByUserIdAndLabelOrderByReceivedAtDesc(userId, Email.EmailLabel.SENT);
     }
 
+    public Page<Email> getDraftEmails(Long userId, Pageable pageable) {
+        return emailRepository.findByUserIdAndLabelOrderByReceivedAtDesc(userId, Email.EmailLabel.DRAFT, pageable);
+    }
+
     public List<Email> getDraftEmails(Long userId) {
         return emailRepository.findByUserIdAndLabelOrderByReceivedAtDesc(userId, Email.EmailLabel.DRAFT);
+    }
+
+    public Page<Email> getEmailsByUserAndCategory(Long userId, Email.EmailCategory category, Pageable pageable) {
+        return emailRepository.findByUserIdAndCategoryOrderByReceivedAtDesc(userId, category, pageable);
     }
 
     public List<Email> getEmailsByUserAndCategory(Long userId, Email.EmailCategory category) {
@@ -361,8 +422,10 @@ public class EmailService {
                 Map responseBody = response.getBody();
                 Map dataMap = (Map) responseBody.get("data");
                 String threadId = null;
+                String messageId = null;
                 if (dataMap != null) {
                     threadId = (String) dataMap.get("thread_id");
+                    messageId = (String) dataMap.get("id");
                 }
 
                 String plainBody = request.getBody() != null ? request.getBody().replaceAll("<[^>]*>", "") : "";
@@ -376,6 +439,7 @@ public class EmailService {
                         .userId(userId)
                         .fromName("Me")
                         .threadId(threadId)
+                        .messageId(messageId)
                         .isRead(true)
                         .label(Email.EmailLabel.SENT)
                         .category(Email.EmailCategory.PRIMARY)

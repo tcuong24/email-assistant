@@ -74,6 +74,9 @@ public class Email {
     private String fromName; 
     private String threadId; 
     
+    @Column(unique = true)
+    private String messageId;
+
     @Builder.Default
     private boolean isRead = false;
     

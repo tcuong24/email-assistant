@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getEmails, getSentEmails, getDraftEmails, analyzeEmail, getThreadEmails, sendEmail } from '../api/emailApi'
+import { getEmails, getSentEmails, getDraftEmails, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import ComposeModal from '../components/ComposeModal'
@@ -27,6 +27,8 @@ import {
   MessageSquare,
   Paperclip,
   Send,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 const CATEGORY_TABS = [
@@ -44,38 +46,87 @@ export default function InboxPage() {
   const [selectedEmailId, setSelectedEmailId] = useState<string | number | null>(null)
   const [activeTab, setActiveTab] = useState("PRIMARY")
 
+  // Quản lý trạng thái trang riêng biệt cho từng danh mục
+  const [pages, setPages] = useState<{ [key: string]: number }>({})
+
   const { user } = useAuth()
   useWebSocket(user?.id)
+
+  const currentKey = activeCategory === "inbox" ? activeTab : activeCategory
+  const currentPage = pages[currentKey] || 0
+
+  const setPageForCurrentKey = (newPage: number) => {
+    setPages(prev => ({
+      ...prev,
+      [currentKey]: newPage
+    }))
+  }
+
+  // Lấy trạng thái kết nối Nylas
+  const { data: nylasStatus } = useQuery({
+    queryKey: ['nylasStatus'],
+    queryFn: () => getNylasStatus().then(r => r.data),
+  })
 
   // Query phụ để lấy tất cả email phục vụ đếm số lượng (inboxCount)
   const { data: allEmails } = useQuery({
     queryKey: ['allEmails'],
-    queryFn: () => getEmails().then(r => r.data),
+    queryFn: () => getEmails(undefined, 0, 1000).then(r => r.data),
     refetchInterval: 300000,
   })
 
   // Query chính động theo category
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['emails', activeCategory, activeTab],
+    queryKey: ['emails', activeCategory, activeTab, currentPage],
     queryFn: () => {
       if (activeCategory === "sent") {
-        return getSentEmails().then(r => r.data)
+        return getSentEmails(currentPage, 50).then(r => r.data)
       }
       if (activeCategory === "drafts") {
-        return getDraftEmails().then(r => r.data)
+        return getDraftEmails(currentPage, 50).then(r => r.data)
       }
       if (activeCategory === "inbox") {
-        return getEmails(activeTab).then(r => r.data)
+        return getEmails(activeTab, currentPage, 50).then(r => r.data)
       }
-      return getEmails().then(r => r.data)
+      return getEmails(undefined, currentPage, 50).then(r => r.data)
     },
     refetchInterval: 300000,
   })
 
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState("")
+
+  // Tự động kích hoạt đồng bộ nếu hòm thư đã kết nối nhưng chưa có email nào
+  useEffect(() => {
+    if (
+      nylasStatus?.connected &&
+      data &&
+      data.totalElements === 0 &&
+      currentPage === 0 &&
+      !isSyncing &&
+      (activeCategory === "inbox" || activeCategory === "all")
+    ) {
+      setIsSyncing(true)
+      setSyncMessage("Đang đồng bộ thư từ Gmail của bạn...")
+      syncEmails()
+        .then(() => {
+          setTimeout(() => {
+            setIsSyncing(false)
+            setSyncMessage("")
+          }, 8000)
+        })
+        .catch((err) => {
+          console.error("Auto sync failed:", err)
+          setIsSyncing(false)
+          setSyncMessage("")
+        })
+    }
+  }, [nylasStatus, data, currentPage, activeCategory])
+
   // Gọi API phân tích AI khi chọn một email đang ở trạng thái PENDING
   useEffect(() => {
     if (selectedEmailId) {
-      const email = data?.find(e => e.id === selectedEmailId);
+      const email = data?.content?.find(e => e.id === selectedEmailId);
       if (email && email.label === 'PENDING') {
         analyzeEmail(selectedEmailId).catch(err => {
           console.error("Failed to trigger AI analysis:", err);
@@ -115,7 +166,7 @@ export default function InboxPage() {
       new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime()
     );
   };
-  const filteredData = data?.filter(email => {
+  const filteredData = data?.content?.filter(email => {
     let matchesCategory = false
     const labelUpper = email.label?.toUpperCase()
 
@@ -159,7 +210,7 @@ export default function InboxPage() {
     setSelectedEmailId(null)
   }, [activeCategory, filterTab, searchQuery])
 
-  const inboxCount = allEmails?.filter(email => email.label?.toUpperCase() !== "SPAM").length || 0
+  const inboxCount = allEmails?.content?.filter(email => email.label?.toUpperCase() !== "SPAM").length || 0
 
   const getCategoryTitle = (category: string) => {
     switch (category) {
@@ -173,7 +224,7 @@ export default function InboxPage() {
     }
   }
 
-  const selectedEmail = data?.find(e => e.id === selectedEmailId)
+  const selectedEmail = data?.content?.find(e => e.id === selectedEmailId)
   const hasSplit = selectedEmailId !== null && selectedEmail !== undefined
 
   const [expandedEmailIds, setExpandedEmailIds] = useState<{ [key: string]: boolean }>({})
@@ -482,8 +533,32 @@ export default function InboxPage() {
               </div>
 
               {/* Pagination info */}
-              <div className="flex items-center gap-2" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                <span>1–{threadedEmails.length} trong số {data?.length || 0}</span>
+              <div className="flex items-center gap-4" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                <span>
+                  {data?.totalElements && data.totalElements > 0 ? (
+                    `${currentPage * 50 + 1}–${currentPage * 50 + (data?.content?.length || 0)} trong số ${data.totalElements}`
+                  ) : (
+                    '0–0 trong số 0'
+                  )}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPageForCurrentKey(currentPage - 1)}
+                    disabled={currentPage === 0 || isLoading}
+                    className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                    title="Trang trước"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setPageForCurrentKey(currentPage + 1)}
+                    disabled={!data || currentPage >= (data.totalPages - 1) || isLoading}
+                    className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                    title="Trang sau"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </>
@@ -545,18 +620,32 @@ export default function InboxPage() {
 
           {threadedEmails.length === 0 && !isLoading && (
             <div className="text-center" style={{ padding: "64px 24px" }}>
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
-                style={{ background: "#EEF2FF" }}
-              >
-                <MailOpen className="w-6 h-6" style={{ color: "#6366F1" }} />
-              </div>
-              <h3 className="text-sm font-bold mb-1" style={{ color: "var(--text-primary)" }}>
-                Thư mục trống
-              </h3>
-              <p className="text-xs max-w-[200px] mx-auto" style={{ color: "var(--text-secondary)" }}>
-                Không tìm thấy email nào phù hợp với bộ lọc.
-              </p>
+              {isSyncing || syncMessage ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: "var(--accent-primary)", borderTopColor: "transparent" }} />
+                  <h3 className="text-sm font-bold mb-1" style={{ color: "var(--text-primary)" }}>
+                    {syncMessage || "Đang đồng bộ..."}
+                  </h3>
+                  <p className="text-xs max-w-[250px] mx-auto" style={{ color: "var(--text-secondary)" }}>
+                    Thư sẽ xuất hiện tự động sau vài giây nhờ kết nối thời gian thực.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div
+                    className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+                    style={{ background: "#EEF2FF" }}
+                  >
+                    <MailOpen className="w-6 h-6" style={{ color: "#6366F1" }} />
+                  </div>
+                  <h3 className="text-sm font-bold mb-1" style={{ color: "var(--text-primary)" }}>
+                    Thư mục trống
+                  </h3>
+                  <p className="text-xs max-w-[200px] mx-auto" style={{ color: "var(--text-secondary)" }}>
+                    Không tìm thấy email nào phù hợp với bộ lọc.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>

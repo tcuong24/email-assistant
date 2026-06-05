@@ -24,6 +24,7 @@ public class EmailEventDto {
         private boolean hasAttachments;
         private String fromName;
         private String threadId;
+        private String messageId;
         private boolean isRead;
         private String category; // PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
     }
