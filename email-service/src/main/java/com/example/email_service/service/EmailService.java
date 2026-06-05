@@ -49,6 +49,8 @@ public class EmailService {
     private final AttachmentRepository attachmentRepository;
     private final CloudinaryService cloudinaryService;
 
+    private final RestTemplate restTemplate = new RestTemplate();
+
     @Value("${NYLAS_API_KEY:}")
     private String nylasApiKey;
 
@@ -57,7 +59,6 @@ public class EmailService {
 
     private List<Map<String, Object>> getNylasFolders(String grantId, String nylasApiKey, String nylasApiUrl) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
@@ -129,7 +130,6 @@ public class EmailService {
 
     private void syncFolderEmails(String grantId, Long userId, String folderId, int maxPages, String nylasApiKey, String nylasApiUrl, org.springframework.http.HttpHeaders headers) {
         if (folderId == null || folderId.isEmpty()) return;
-        RestTemplate restTemplate = new RestTemplate();
         HttpEntity<Void> entity = new HttpEntity<>(headers);
         String nextCursor = null;
         int pagesSynced = 0;
@@ -462,6 +462,20 @@ public class EmailService {
 
                 if (fileId == null || fileId.isEmpty()) continue;
 
+                // Skip downloading very large attachments to prevent OutOfMemoryError in 512MB RAM environment
+                if (size > 5 * 1024 * 1024) { // 5MB limit
+                    log.warn("Attachment {} is too large ({} bytes). Skipping download.", filename, size);
+                    Attachment attachment = Attachment.builder()
+                            .filename(filename != null ? filename : "unnamed")
+                            .contentType(contentType)
+                            .size(size)
+                            .r2Url("") // Empty URL for oversized files
+                            .email(email)
+                            .build();
+                    attachmentRepository.save(attachment);
+                    continue;
+                }
+
                 // 1. Download file from Nylas
                 byte[] content = downloadNylasFile(grantId, fileId);
                 if (content == null || content.length == 0) {
@@ -491,7 +505,6 @@ public class EmailService {
 
     private byte[] downloadNylasFile(String grantId, String fileId) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
@@ -514,7 +527,6 @@ public class EmailService {
         }
 
         try {
-            RestTemplate restTemplate = new RestTemplate();
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.setBearerAuth(nylasApiKey);
@@ -576,7 +588,6 @@ public class EmailService {
 
     private String userEmailFromGrantId(String grantId) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
