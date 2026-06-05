@@ -55,78 +55,188 @@ public class EmailService {
     @Value("${NYLAS_API_URL:https://api.us.nylas.com}")
     private String nylasApiUrl;
 
-    @Async
-    public void syncHistoricalEmails(String grantId, Long userId, String nylasApiKey, String nylasApiUrl) {
+    private List<Map<String, Object>> getNylasFolders(String grantId, String nylasApiKey, String nylasApiUrl) {
         try {
             RestTemplate restTemplate = new RestTemplate();
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
-            String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages?limit=50";
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/folders";
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-
-            if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
-                List<Map<String, Object>> messages = (List<Map<String, Object>>) response.getBody().get("data");
-                if (messages != null) {
-                    log.info("Bắt đầu đồng bộ {} email cũ cho userId {}", messages.size(), userId);
-                    for (Map<String, Object> msg : messages) {
-                        String subject = (String) msg.get("subject");
-                        String body = (String) msg.get("body");
-
-                        LocalDateTime emailDate = LocalDateTime.now();
-                        if (msg.get("date") != null) {
-                            long dateSeconds = ((Number) msg.get("date")).longValue();
-                            emailDate = LocalDateTime.ofInstant(
-                                    Instant.ofEpochSecond(dateSeconds),
-                                    ZoneId.systemDefault());
-                        }
-
-                        String snippet = (String) msg.get("snippet");
-                        List<?> attachments = (List<?>) msg.get("attachments");
-                        boolean hasAttachments = attachments != null && !attachments.isEmpty();
-                        // Lấy địa chỉ email người gửi từ mảng "from"
-                        List<Map<String, Object>> fromList = (List<Map<String, Object>>) msg.get("from");
-                        String fromAddress = "";
-                        String fromName = "";
-                        if (fromList != null && !fromList.isEmpty()) {
-                            fromAddress = (String) fromList.get(0).get("email");
-                            fromName = (String) fromList.get(0).get("name");
-                        }
-
-                        String threadId = (String) msg.get("thread_id");
-                        String messageId = (String) msg.get("id");
-                        boolean unread = msg.get("unread") != null ? (boolean) msg.get("unread") : true;
-                        boolean isRead = !unread;
-
-                        List<String> folders = (List<String>) msg.get("folders");
-                        String categoryStr = extractCategory(folders).name();
-
-                        // Tận dụng hàm receiveEmail đã viết sẵn để lưu DB
-                        ReceiveEmailRequest request = new ReceiveEmailRequest();
-                        request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
-                        request.setBody(body != null ? body : "");
-                        request.setSnippet(snippet != null ? snippet : "");
-                        request.setHasAttachments(hasAttachments);
-                        request.setReceivedAt(emailDate);
-                        request.setFromAddress(fromAddress != null ? fromAddress : "");
-                        request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
-                        request.setThreadId(threadId);
-                        request.setMessageId(messageId);
-                        request.setRead(isRead);
-                        request.setCategory(categoryStr);
-
-                        Email savedEmail = this.receiveEmail(request, userId);
-                        if (hasAttachments) {
-                            List<Map<String, Object>> attList = (List<Map<String, Object>>) msg.get("attachments");
-                            processAttachments(savedEmail, attList, grantId);
-                        }
-                    }
-                    log.info("Hoàn tất đồng bộ {} email cũ cho userId {}", messages.size(), userId);
-                }
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return (List<Map<String, Object>>) response.getBody().get("data");
             }
         } catch (Exception e) {
-            log.error("Lỗi đồng bộ email lịch sử cho userId {}: {}", userId, e.getMessage());
+            log.error("Failed to fetch folders for grantId={}: {}", grantId, e.getMessage());
+        }
+        return List.of();
+    }
+
+    private void processNylasMessage(Map<String, Object> msg, String grantId, Long userId) {
+        try {
+            String subject = (String) msg.get("subject");
+            String body = (String) msg.get("body");
+
+            LocalDateTime emailDate = LocalDateTime.now();
+            if (msg.get("date") != null) {
+                long dateSeconds = ((Number) msg.get("date")).longValue();
+                emailDate = LocalDateTime.ofInstant(
+                        Instant.ofEpochSecond(dateSeconds),
+                        ZoneId.systemDefault());
+            }
+
+            String snippet = (String) msg.get("snippet");
+            List<?> attachments = (List<?>) msg.get("attachments");
+            boolean hasAttachments = attachments != null && !attachments.isEmpty();
+            List<Map<String, Object>> fromList = (List<Map<String, Object>>) msg.get("from");
+            String fromAddress = "";
+            String fromName = "";
+            if (fromList != null && !fromList.isEmpty()) {
+                fromAddress = (String) fromList.get(0).get("email");
+                fromName = (String) fromList.get(0).get("name");
+            }
+
+            String threadId = (String) msg.get("thread_id");
+            String messageId = (String) msg.get("id");
+            boolean unread = msg.get("unread") != null ? (boolean) msg.get("unread") : true;
+            boolean isRead = !unread;
+
+            List<String> folders = (List<String>) msg.get("folders");
+            String categoryStr = extractCategory(folders).name();
+
+            ReceiveEmailRequest request = new ReceiveEmailRequest();
+            request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
+            request.setBody(body != null ? body : "");
+            request.setSnippet(snippet != null ? snippet : "");
+            request.setHasAttachments(hasAttachments);
+            request.setReceivedAt(emailDate);
+            request.setFromAddress(fromAddress != null ? fromAddress : "");
+            request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
+            request.setThreadId(threadId);
+            request.setMessageId(messageId);
+            request.setRead(isRead);
+            request.setCategory(categoryStr);
+
+            Email savedEmail = this.receiveEmail(request, userId);
+            if (hasAttachments) {
+                List<Map<String, Object>> attList = (List<Map<String, Object>>) msg.get("attachments");
+                processAttachments(savedEmail, attList, grantId);
+            }
+        } catch (Exception e) {
+            log.error("Lỗi khi xử lý message từ Nylas: {}", e.getMessage());
+        }
+    }
+
+    private void syncFolderEmails(String grantId, Long userId, String folderId, int maxPages, String nylasApiKey, String nylasApiUrl, org.springframework.http.HttpHeaders headers) {
+        if (folderId == null || folderId.isEmpty()) return;
+        RestTemplate restTemplate = new RestTemplate();
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+        String nextCursor = null;
+        int pagesSynced = 0;
+        
+        do {
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages?limit=50&in=" + folderId;
+            if (nextCursor != null && !nextCursor.isEmpty()) {
+                url += "&page_token=" + nextCursor;
+            }
+            
+            try {
+                ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+                if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                    List<Map<String, Object>> messages = (List<Map<String, Object>>) response.getBody().get("data");
+                    nextCursor = (String) response.getBody().get("next_cursor");
+                    
+                    if (messages != null && !messages.isEmpty()) {
+                        log.info("Thư mục {}: Đồng bộ trang {} ({} email) cho userId {}", folderId, pagesSynced + 1, messages.size(), userId);
+                        for (Map<String, Object> msg : messages) {
+                            processNylasMessage(msg, grantId, userId);
+                        }
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+                pagesSynced++;
+                Thread.sleep(200);
+            } catch (Exception e) {
+                log.error("Lỗi đồng bộ thư mục {} trang {}: {}", folderId, pagesSynced + 1, e.getMessage());
+                break;
+            }
+        } while (nextCursor != null && !nextCursor.isEmpty() && pagesSynced < maxPages);
+    }
+
+    @Async
+    public void syncHistoricalEmails(String grantId, Long userId, String nylasApiKey, String nylasApiUrl) {
+        try {
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(nylasApiKey);
+
+            // Bước 1: Lấy danh sách nhãn/thư mục từ Nylas để tìm ID nhãn của Gmail
+            List<Map<String, Object>> folders = getNylasFolders(grantId, nylasApiKey, nylasApiUrl);
+            String inboxFolderId = "inbox";
+            String personalFolderId = null;
+            String promotionsFolderId = null;
+            String updatesFolderId = null;
+            String socialFolderId = null;
+            String forumsFolderId = null;
+
+            for (Map<String, Object> folder : folders) {
+                String name = (String) folder.get("name");
+                String id = (String) folder.get("id");
+                if ("INBOX".equalsIgnoreCase(name)) {
+                    inboxFolderId = id;
+                } else if ("CATEGORY_PERSONAL".equalsIgnoreCase(name)) {
+                    personalFolderId = id;
+                } else if ("CATEGORY_PROMOTIONS".equalsIgnoreCase(name)) {
+                    promotionsFolderId = id;
+                } else if ("CATEGORY_UPDATES".equalsIgnoreCase(name)) {
+                    updatesFolderId = id;
+                } else if ("CATEGORY_SOCIAL".equalsIgnoreCase(name)) {
+                    socialFolderId = id;
+                } else if ("CATEGORY_FORUMS".equalsIgnoreCase(name)) {
+                    forumsFolderId = id;
+                }
+            }
+
+            log.info("Bắt đầu tiến trình đồng bộ chọn lọc (Selective Sync) cho userId {}", userId);
+
+            // Bước 2: Đồng bộ chọn lọc theo từng nhãn với độ sâu khác nhau
+            
+            // 1. Thư chính (Sâu: tối đa 10 trang = 500 thư)
+            String primaryTarget = (personalFolderId != null) ? personalFolderId : inboxFolderId;
+            log.info("Đồng bộ thư chính (Primary) sâu cho userId {}", userId);
+            syncFolderEmails(grantId, userId, primaryTarget, 10, nylasApiKey, nylasApiUrl, headers);
+
+            // 2. Thư quảng cáo (Nông: tối đa 1 trang = 50 thư)
+            if (promotionsFolderId != null) {
+                log.info("Đồng bộ thư Quảng cáo (Promotions) nông cho userId {}", userId);
+                syncFolderEmails(grantId, userId, promotionsFolderId, 1, nylasApiKey, nylasApiUrl, headers);
+            }
+
+            // 3. Thư cập nhật (Nông: tối đa 1 trang = 50 thư)
+            if (updatesFolderId != null) {
+                log.info("Đồng bộ thư Cập nhật (Updates) nông cho userId {}", userId);
+                syncFolderEmails(grantId, userId, updatesFolderId, 1, nylasApiKey, nylasApiUrl, headers);
+            }
+
+            // 4. Thư mạng xã hội (Nông: tối đa 1 trang = 50 thư)
+            if (socialFolderId != null) {
+                log.info("Đồng bộ thư Mạng xã hội (Social) nông cho userId {}", userId);
+                syncFolderEmails(grantId, userId, socialFolderId, 1, nylasApiKey, nylasApiUrl, headers);
+            }
+
+            // 5. Thư diễn đàn (Nông: tối đa 1 trang = 50 thư)
+            if (forumsFolderId != null) {
+                log.info("Đồng bộ thư Diễn đàn (Forums) nông cho userId {}", userId);
+                syncFolderEmails(grantId, userId, forumsFolderId, 1, nylasApiKey, nylasApiUrl, headers);
+            }
+
+            log.info("Hoàn tất tiến trình đồng bộ chọn lọc cho userId {}", userId);
+
+        } catch (Exception e) {
+            log.error("Lỗi tổng quát trong đồng bộ chọn lọc cho userId {}: {}", userId, e.getMessage());
         }
     }
 
@@ -215,7 +325,13 @@ public class EmailService {
     @Transactional
     public void updateAiResult(AiResultEvent event) {
         emailRepository.findById(event.getEmailId()).ifPresent(email -> {
-            email.setLabel(Email.EmailLabel.valueOf(event.getLabel()));
+            // Lập trình phòng thủ: Bọc trong try-catch để tránh crash luồng Kafka khi nhận nhãn lạ
+            try {
+                email.setLabel(Email.EmailLabel.valueOf(event.getLabel().toUpperCase().strip()));
+            } catch (IllegalArgumentException e) {
+                log.warn("Nhận nhãn lạ từ AI: {}. Chuyển hướng thành NORMAL.", event.getLabel());
+                email.setLabel(Email.EmailLabel.NORMAL);
+            }
             email.setSummary(event.getSummary());
             email.setSuggestedReplies(
                     event.getSuggestedReplies() != null ? String.join("||", event.getSuggestedReplies()) : "");
@@ -223,7 +339,7 @@ public class EmailService {
                     event.getActionItems() != null ? String.join("||", event.getActionItems()) : "");
             emailRepository.save(email);
             log.info("Email {} cập nhật AI result: {}",
-                    email.getId(), event.getLabel());
+                    email.getId(), email.getLabel());
 
             // Push notification qua WebSocket
             try {
@@ -379,7 +495,7 @@ public class EmailService {
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
-            String url = nylasApiUrl + "/v3/grants/" + grantId + "/files/" + fileId + "/download";
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/attachments/" + fileId + "/download";
             ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
             if (response.getStatusCode() == HttpStatus.OK) {
                 return response.getBody();
