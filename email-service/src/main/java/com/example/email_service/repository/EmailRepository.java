@@ -21,6 +21,8 @@ public interface EmailRepository extends JpaRepository<Email, Long> {
     Page<Email> findByUserIdAndLabelOrderByReceivedAtDesc(Long userId, Email.EmailLabel label, Pageable pageable);
     List<Email> findByUserIdAndLabelOrderByReceivedAtDesc(Long userId, Email.EmailLabel label);
     long countByUserIdAndLabel(Long userId, Email.EmailLabel label);
+    long countByUserId(Long userId);
+    long countByUserIdAndIsReadFalse(Long userId);
     Page<Email> findByUserIdAndCategoryOrderByReceivedAtDesc(Long userId, Email.EmailCategory category, Pageable pageable);
     List<Email> findByUserIdAndCategoryOrderByReceivedAtDesc(Long userId, Email.EmailCategory category);
     List<Email> findByThreadIdAndUserIdOrderByReceivedAtAsc(String threadId, Long userId);

@@ -631,4 +631,17 @@ public class EmailService {
         }
         return "me@example.com";
     }
+
+    public Map<String, Long> getEmailStats(Long userId) {
+        long total = emailRepository.countByUserId(userId);
+        long unread = emailRepository.countByUserIdAndIsReadFalse(userId);
+        long important = emailRepository.countByUserIdAndLabel(userId, Email.EmailLabel.IMPORTANT);
+        long spam = emailRepository.countByUserIdAndLabel(userId, Email.EmailLabel.SPAM);
+        return Map.of(
+            "total", total,
+            "unread", unread,
+            "important", important,
+            "spam", spam
+        );
+    }
 }

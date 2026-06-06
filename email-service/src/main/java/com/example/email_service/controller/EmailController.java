@@ -111,6 +111,12 @@ public class EmailController {
         return ResponseEntity.ok(Map.of("status", "success", "message", "Bắt đầu đồng bộ email"));
     }
 
+    // Lấy thông số thống kê email của người dùng
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Long>> getEmailStats(@RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(emailService.getEmailStats(userId));
+    }
+
     // Lấy tất cả email trong một luồng (thread)
     @GetMapping("/thread/{threadId}")
     public ResponseEntity<List<Email>> getThreadEmails(

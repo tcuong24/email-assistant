@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getEmails, getSentEmails, getDraftEmails, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails } from '../api/emailApi'
+import { getEmails, getSentEmails, getDraftEmails, getEmailStats, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import ComposeModal from '../components/ComposeModal'
@@ -69,10 +69,10 @@ export default function InboxPage() {
     queryFn: () => getNylasStatus().then(r => r.data),
   })
 
-  // Query phụ để lấy tất cả email phục vụ đếm số lượng (inboxCount)
-  const { data: allEmails } = useQuery({
-    queryKey: ['allEmails'],
-    queryFn: () => getEmails(undefined, 0, 1000).then(r => r.data),
+  // Query phụ để lấy thống kê số lượng (inboxCount)
+  const { data: statsData } = useQuery({
+    queryKey: ['emailStats'],
+    queryFn: () => getEmailStats().then(r => r.data),
     refetchInterval: 300000,
   })
 
@@ -214,7 +214,7 @@ export default function InboxPage() {
     setSelectedEmailId(null)
   }, [activeCategory, filterTab, searchQuery])
 
-  const inboxCount = allEmails?.content?.filter(email => email.label?.toUpperCase() !== "SPAM").length || 0
+  const inboxCount = (statsData?.total || 0) - (statsData?.spam || 0)
 
   const getCategoryTitle = (category: string) => {
     switch (category) {

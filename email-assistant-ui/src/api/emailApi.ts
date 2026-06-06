@@ -44,6 +44,7 @@ export interface Page<T> {
 export const getEmails       = (category?: string, page = 0, size = 50) => api.get<Page<Email>>(category ? `/emails?category=${category}&page=${page}&size=${size}` : `/emails?page=${page}&size=${size}`)
 export const getSentEmails   = (page = 0, size = 50) => api.get<Page<Email>>(`/emails/sent?page=${page}&size=${size}`)
 export const getDraftEmails  = (page = 0, size = 50) => api.get<Page<Email>>(`/emails/drafts?page=${page}&size=${size}`)
+export const getEmailStats   = () => api.get<{ total: number, unread: number, important: number, spam: number }>('/emails/stats')
 export const getEmail        = (id: number | string) => api.get<Email>(`/emails/${id}`)
 export const receiveEmail    = (data: EmailData) => api.post<Email>('/emails/receive', data)
 export const analyzeEmail    = (id: number | string) => api.post<Email>(`/emails/${id}/analyze`)

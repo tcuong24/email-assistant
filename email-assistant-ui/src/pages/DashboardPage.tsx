@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getEmails } from '../api/emailApi'
+import { getEmails, getEmailStats } from '../api/emailApi'
 import Sidebar from '../components/Sidebar'
 import {
   Mail,
@@ -13,16 +13,16 @@ import {
 export default function DashboardPage() {
   const navigate = useNavigate()
 
-  const { data: emails, isLoading } = useQuery({
-    queryKey: ['emails'],
-    queryFn: () => getEmails(undefined, 0, 1000).then(r => r.data),
+  const { data: statsData, isLoading } = useQuery({
+    queryKey: ['emailStats'],
+    queryFn: () => getEmailStats().then(r => r.data),
   })
 
   const stats = {
-    total: emails?.totalElements || 0,
-    unread: emails?.content?.filter(e => e.status !== 'READ').length || 0,
-    important: emails?.content?.filter(e => e.label?.toUpperCase() === 'IMPORTANT').length || 0,
-    spam: emails?.content?.filter(e => e.label?.toUpperCase() === 'SPAM').length || 0,
+    total: statsData?.total || 0,
+    unread: statsData?.unread || 0,
+    important: statsData?.important || 0,
+    spam: statsData?.spam || 0,
   }
 
   const statCards = [
