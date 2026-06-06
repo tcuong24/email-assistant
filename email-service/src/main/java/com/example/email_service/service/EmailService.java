@@ -51,6 +51,8 @@ public class EmailService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    private final java.util.Set<Long> activeSyncUsers = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     @Value("${NYLAS_API_KEY:}")
     private String nylasApiKey;
 
@@ -168,6 +170,10 @@ public class EmailService {
 
     @Async
     public void syncHistoricalEmails(String grantId, Long userId, String nylasApiKey, String nylasApiUrl) {
+        if (!activeSyncUsers.add(userId)) {
+            log.warn("Tiến trình đồng bộ chọn lọc (Selective Sync) đang chạy cho userId {}. Bỏ qua yêu cầu mới.", userId);
+            return;
+        }
         try {
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
@@ -237,6 +243,8 @@ public class EmailService {
 
         } catch (Exception e) {
             log.error("Lỗi tổng quát trong đồng bộ chọn lọc cho userId {}: {}", userId, e.getMessage());
+        } finally {
+            activeSyncUsers.remove(userId);
         }
     }
 

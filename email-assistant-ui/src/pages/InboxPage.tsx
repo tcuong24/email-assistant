@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { getEmails, getSentEmails, getDraftEmails, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails } from '../api/emailApi'
@@ -42,6 +42,7 @@ const CATEGORY_TABS = [
 export default function InboxPage() {
   const [activeCategory, setActiveCategory] = useState("inbox")
   const [searchQuery, setSearchQuery] = useState("")
+  const autoSyncTriggered = useRef(false)
   const [filterTab, setFilterTab] = useState("all")
   const [selectedEmailId, setSelectedEmailId] = useState<string | number | null>(null)
   const [activeTab, setActiveTab] = useState("PRIMARY")
@@ -103,9 +104,11 @@ export default function InboxPage() {
       data &&
       data.totalElements === 0 &&
       currentPage === 0 &&
+      !autoSyncTriggered.current &&
       !isSyncing &&
       (activeCategory === "inbox" || activeCategory === "all")
     ) {
+      autoSyncTriggered.current = true
       setIsSyncing(true)
       setSyncMessage("Đang đồng bộ thư từ Gmail của bạn...")
       syncEmails()
@@ -113,12 +116,13 @@ export default function InboxPage() {
           setTimeout(() => {
             setIsSyncing(false)
             setSyncMessage("")
-          }, 8000)
+          }, 15000)
         })
         .catch((err) => {
           console.error("Auto sync failed:", err)
           setIsSyncing(false)
           setSyncMessage("")
+          autoSyncTriggered.current = false
         })
     }
   }, [nylasStatus, data, currentPage, activeCategory])
