@@ -33,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.util.Optional;
@@ -130,14 +131,28 @@ public class EmailService {
         }
     }
 
-    private void syncFolderEmails(String grantId, Long userId, String folderId, int maxPages, String nylasApiKey, String nylasApiUrl, org.springframework.http.HttpHeaders headers) {
+    private void syncFolderEmails(String grantId, Long userId, String folderId, int maxPages, Email.EmailCategory category, String nylasApiKey, String nylasApiUrl, org.springframework.http.HttpHeaders headers) {
         if (folderId == null || folderId.isEmpty()) return;
+
+        Long receivedAfter = null;
+        Page<Email> newestPage = emailRepository.findByUserIdAndCategoryOrderByReceivedAtDesc(userId, category, PageRequest.of(0, 1));
+        if (newestPage.hasContent()) {
+            LocalDateTime newestTime = newestPage.getContent().get(0).getReceivedAt();
+            if (newestTime != null) {
+                receivedAfter = newestTime.atZone(ZoneId.systemDefault()).toEpochSecond();
+                log.info("Thư mục {} (Danh mục {}): Tìm thấy email mới nhất ngày {}. Chỉ đồng bộ email sau mốc này.", folderId, category, newestTime);
+            }
+        }
+
         HttpEntity<Void> entity = new HttpEntity<>(headers);
         String nextCursor = null;
         int pagesSynced = 0;
         
         do {
             String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages?limit=50&in=" + folderId;
+            if (receivedAfter != null) {
+                url += "&received_after=" + (receivedAfter + 1);
+            }
             if (nextCursor != null && !nextCursor.isEmpty()) {
                 url += "&page_token=" + nextCursor;
             }
@@ -213,30 +228,30 @@ public class EmailService {
             // 1. Thư chính (Sâu: tối đa 10 trang = 500 thư)
             String primaryTarget = (personalFolderId != null) ? personalFolderId : inboxFolderId;
             log.info("Đồng bộ thư chính (Primary) sâu cho userId {}", userId);
-            syncFolderEmails(grantId, userId, primaryTarget, 10, nylasApiKey, nylasApiUrl, headers);
+            syncFolderEmails(grantId, userId, primaryTarget, 10, Email.EmailCategory.PRIMARY, nylasApiKey, nylasApiUrl, headers);
 
             // 2. Thư quảng cáo (Nông: tối đa 1 trang = 50 thư)
             if (promotionsFolderId != null) {
                 log.info("Đồng bộ thư Quảng cáo (Promotions) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, promotionsFolderId, 1, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, promotionsFolderId, 1, Email.EmailCategory.PROMOTIONS, nylasApiKey, nylasApiUrl, headers);
             }
 
             // 3. Thư cập nhật (Nông: tối đa 1 trang = 50 thư)
             if (updatesFolderId != null) {
                 log.info("Đồng bộ thư Cập nhật (Updates) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, updatesFolderId, 1, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, updatesFolderId, 1, Email.EmailCategory.UPDATES, nylasApiKey, nylasApiUrl, headers);
             }
 
             // 4. Thư mạng xã hội (Nông: tối đa 1 trang = 50 thư)
             if (socialFolderId != null) {
                 log.info("Đồng bộ thư Mạng xã hội (Social) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, socialFolderId, 1, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, socialFolderId, 1, Email.EmailCategory.SOCIAL, nylasApiKey, nylasApiUrl, headers);
             }
 
             // 5. Thư diễn đàn (Nông: tối đa 1 trang = 50 thư)
             if (forumsFolderId != null) {
                 log.info("Đồng bộ thư Diễn đàn (Forums) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, forumsFolderId, 1, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, forumsFolderId, 1, Email.EmailCategory.FORUMS, nylasApiKey, nylasApiUrl, headers);
             }
 
             log.info("Hoàn tất tiến trình đồng bộ chọn lọc cho userId {}", userId);
@@ -485,7 +500,7 @@ public class EmailService {
                 }
 
                 // 1. Download file from Nylas
-                byte[] content = downloadNylasFile(grantId, fileId);
+                byte[] content = downloadNylasFile(grantId, fileId, email.getMessageId());
                 if (content == null || content.length == 0) {
                     log.warn("Nylas file download returned empty content for fileId={}", fileId);
                     continue;
@@ -511,18 +526,21 @@ public class EmailService {
         }
     }
 
-    private byte[] downloadNylasFile(String grantId, String fileId) {
+    private byte[] downloadNylasFile(String grantId, String fileId, String messageId) {
         try {
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setBearerAuth(nylasApiKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             String url = nylasApiUrl + "/v3/grants/" + grantId + "/attachments/" + fileId + "/download";
+            if (messageId != null && !messageId.isEmpty()) {
+                url += "?message_id=" + messageId;
+            }
             ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
             if (response.getStatusCode() == HttpStatus.OK) {
                 return response.getBody();
             }
         } catch (Exception e) {
-            log.error("Failed to download Nylas file grantId={}, fileId={}, error={}", grantId, fileId, e.getMessage());
+            log.error("Failed to download Nylas file grantId={}, fileId={}, messageId={}, error={}", grantId, fileId, messageId, e.getMessage());
         }
         return null;
     }
