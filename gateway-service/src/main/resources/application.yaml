@@ -12,7 +12,13 @@ spring:
           enabled: false
 
       default-filters:
-        - AddRequestHeader=User-Agent, Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/120.0.0.0 Safari/537.36
+        - SetRequestHeader=User-Agent, Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/120.0.0.0 Safari/537.36
+
+      httpclient:
+        pool:
+          type: disabled
+        connect-timeout: 5000
+        response-timeout: 30s
 
       routes:
         # ── user-service ──────────────────────────────────────────
