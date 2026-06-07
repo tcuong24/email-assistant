@@ -25,10 +25,12 @@ import com.example.email_service.entity.Email;
 import com.example.email_service.service.EmailService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/api/v1/emails")
 @RequiredArgsConstructor
+@Slf4j
 public class EmailController {
 
     private final EmailService emailService;
@@ -198,18 +200,22 @@ public class EmailController {
     @GetMapping("/nylas-webhook")
     public ResponseEntity<String> verifyNylasWebhook(
             @org.springframework.web.bind.annotation.RequestParam("challenge") String challenge) {
+        log.info("Nylas GET webhook verification triggered: challenge={}", challenge);
         return ResponseEntity.ok(challenge);
     }
 
     // Nhận email thật thời gian thực từ Nylas Webhook
     @PostMapping("/nylas-webhook")
     public ResponseEntity<?> handleNylasWebhook(@RequestBody java.util.Map<String, Object> payload) {
+        log.info("Nylas POST webhook received payload: {}", payload);
         try {
             String type = (String) payload.get("type");
+            log.info("Webhook event type: {}", type);
             if ("message.created".equals(type)) {
                 java.util.Map<String, Object> data = (java.util.Map<String, Object>) payload.get("data");
                 if (data != null) {
                     String grantId = (String) data.get("grant_id");
+                    log.info("Webhook grantId: {}", grantId);
                     java.util.Map<String, Object> object = (java.util.Map<String, Object>) data.get("object");
                     if (grantId != null && object != null) {
                         String subject = (String) object.get("subject");
@@ -233,6 +239,7 @@ public class EmailController {
 
                         Long userId = emailService.findUserIdByGrantId(grantId);
                         if (userId != null) {
+                            log.info("Mapped grantId {} to userId {}. Processing receive...", grantId, userId);
                             List<String> folders = (List<String>) object.get("folders");
                             String categoryStr = emailService.extractCategory(folders).name();
 
@@ -247,15 +254,18 @@ public class EmailController {
                             request.setMessageId(messageId);
                             request.setRead(isRead);
                             Email savedEmail = emailService.receiveEmail(request, userId);
+                            log.info("Email saved with ID: {}", savedEmail.getId());
                             if (hasAttachments && attachments != null) {
                                 emailService.processAttachments(savedEmail, (List<Map<String, Object>>) attachments, grantId);
                             }
+                        } else {
+                            log.warn("Could not find mapped userId for grantId: {}", grantId);
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            // Không làm gì, trả về 200 để tránh Nylas block webhook
+            log.error("Exception handling Nylas webhook payload: ", e);
         }
         return ResponseEntity.ok().build();
     }
