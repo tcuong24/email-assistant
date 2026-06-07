@@ -9,8 +9,12 @@ export function useWebSocket(userId: number | string | undefined) {
   useEffect(() => {
     if (!userId) return
 
-    // Kết nối tới endpoint /ws (đã được cấu hình qua Vite Proxy và Gateway)
-    const socketUrl = '/ws'
+    // Kết nối tới endpoint /ws (được cấu hình động giữa Local và Production)
+    const socketUrl = import.meta.env.VITE_WS_URL || (
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? '/ws'
+        : 'https://cuongtran0413-gateway-service.hf.space/ws'
+    )
 
     const stompClient = new Client({
       webSocketFactory: () => new SockJS(socketUrl),
