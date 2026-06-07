@@ -97,18 +97,18 @@ export default function InboxPage() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState("")
 
-  // Tự động kích hoạt đồng bộ nếu hòm thư đã kết nối nhưng chưa có email nào
+  // Tự động kích hoạt đồng bộ (đồng bộ hiển thị nếu chưa có thư, đồng bộ ngầm nếu đã có thư)
   useEffect(() => {
+    if (!nylasStatus?.connected || !data || autoSyncTriggered.current) return
+
+    autoSyncTriggered.current = true
+
     if (
-      nylasStatus?.connected &&
-      data &&
       data.totalElements === 0 &&
       currentPage === 0 &&
-      !autoSyncTriggered.current &&
-      !isSyncing &&
       (activeCategory === "inbox" || activeCategory === "all")
     ) {
-      autoSyncTriggered.current = true
+      // Nếu chưa có thư nào, hiển thị vòng xoay trạng thái cho người dùng thấy
       setIsSyncing(true)
       setSyncMessage("Đang đồng bộ thư từ Gmail của bạn...")
       syncEmails()
@@ -124,6 +124,12 @@ export default function InboxPage() {
           setSyncMessage("")
           autoSyncTriggered.current = false
         })
+    } else {
+      // Nếu đã có thư trong DB, thực hiện đồng bộ ngầm (background sync) để không cản trở người dùng
+      syncEmails().catch((err) => {
+        console.error("Background auto sync failed:", err)
+        autoSyncTriggered.current = false
+      })
     }
   }, [nylasStatus, data, currentPage, activeCategory])
 
