@@ -214,9 +214,15 @@ public class EmailController {
             if ("message.created".equals(type)) {
                 java.util.Map<String, Object> data = (java.util.Map<String, Object>) payload.get("data");
                 if (data != null) {
-                    String grantId = (String) data.get("grant_id");
-                    log.info("Webhook grantId: {}", grantId);
                     java.util.Map<String, Object> object = (java.util.Map<String, Object>) data.get("object");
+                    String grantId = null;
+                    if (object != null) {
+                        grantId = (String) object.get("grant_id");
+                    }
+                    if (grantId == null) {
+                        grantId = (String) data.get("grant_id");
+                    }
+                    log.info("Webhook grantId: {}", grantId);
                     if (grantId != null && object != null) {
                         String subject = (String) object.get("subject");
                         String body = (String) object.get("body");
