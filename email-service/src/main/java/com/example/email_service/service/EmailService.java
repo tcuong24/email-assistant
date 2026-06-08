@@ -76,7 +76,7 @@ public class EmailService {
         return List.of();
     }
 
-    private void processNylasMessage(Map<String, Object> msg, String grantId, Long userId) {
+    private void processNylasMessage(Map<String, Object> msg, String grantId, Long userId, Email.EmailCategory overrideCategory, Email.EmailLabel overrideLabel) {
         try {
             String subject = (String) msg.get("subject");
             String body = (String) msg.get("body");
@@ -106,7 +106,7 @@ public class EmailService {
             boolean isRead = !unread;
 
             List<String> folders = (List<String>) msg.get("folders");
-            String categoryStr = extractCategory(folders).name();
+            String categoryStr = (overrideCategory != null) ? overrideCategory.name() : extractCategory(folders).name();
 
             ReceiveEmailRequest request = new ReceiveEmailRequest();
             request.setSubject(subject != null ? subject : "(Không có tiêu đề)");
@@ -121,7 +121,7 @@ public class EmailService {
             request.setRead(isRead);
             request.setCategory(categoryStr);
 
-            Email savedEmail = this.receiveEmail(request, userId);
+            Email savedEmail = this.receiveEmail(request, userId, overrideLabel);
             if (hasAttachments) {
                 List<Map<String, Object>> attList = (List<Map<String, Object>>) msg.get("attachments");
                 processAttachments(savedEmail, attList, grantId);
@@ -166,7 +166,8 @@ public class EmailService {
                     if (messages != null && !messages.isEmpty()) {
                         log.info("Thư mục {}: Đồng bộ trang {} ({} email) cho userId {}", folderId, pagesSynced + 1, messages.size(), userId);
                         for (Map<String, Object> msg : messages) {
-                            processNylasMessage(msg, grantId, userId);
+                            Email.EmailLabel overrideLabel = (category == Email.EmailCategory.SENT) ? Email.EmailLabel.SENT : null;
+                            processNylasMessage(msg, grantId, userId, category, overrideLabel);
                         }
                     } else {
                         break;
@@ -202,6 +203,7 @@ public class EmailService {
             String updatesFolderId = null;
             String socialFolderId = null;
             String forumsFolderId = null;
+            String sentFolderId = null;
 
             for (Map<String, Object> folder : folders) {
                 String name = (String) folder.get("name");
@@ -218,6 +220,8 @@ public class EmailService {
                     socialFolderId = id;
                 } else if ("CATEGORY_FORUMS".equalsIgnoreCase(name)) {
                     forumsFolderId = id;
+                } else if ("SENT".equalsIgnoreCase(name) || (name != null && name.toLowerCase().contains("sent"))) {
+                    sentFolderId = id;
                 }
             }
 
@@ -254,6 +258,12 @@ public class EmailService {
                 syncFolderEmails(grantId, userId, forumsFolderId, 1, Email.EmailCategory.FORUMS, nylasApiKey, nylasApiUrl, headers);
             }
 
+            // 6. Thư đã gửi (Sâu: tối đa 5 trang = 250 thư)
+            if (sentFolderId != null) {
+                log.info("Đồng bộ thư đã gửi (Sent) sâu cho userId {}", userId);
+                syncFolderEmails(grantId, userId, sentFolderId, 5, Email.EmailCategory.SENT, nylasApiKey, nylasApiUrl, headers);
+            }
+
             log.info("Hoàn tất tiến trình đồng bộ chọn lọc cho userId {}", userId);
 
         } catch (Exception e) {
@@ -282,9 +292,13 @@ public class EmailService {
     @Value("${app.kafka.topics.email-received}")
     private String emailReceivedTopic;
 
-    // Nhận email mới (từ webhook hoặc API giả lập)
     @Transactional
     public Email receiveEmail(ReceiveEmailRequest request, Long userId) {
+        return receiveEmail(request, userId, null);
+    }
+
+    @Transactional
+    public Email receiveEmail(ReceiveEmailRequest request, Long userId, Email.EmailLabel overrideLabel) {
         // Kiểm tra trùng lặp qua messageId
         if (request.getMessageId() != null && !request.getMessageId().isEmpty()) {
             Optional<Email> existingEmail = emailRepository.findByMessageId(request.getMessageId());
@@ -303,7 +317,7 @@ public class EmailService {
                 .threadId(request.getThreadId())
                 .messageId(request.getMessageId())
                 .isRead(request.isRead())
-                .label(Email.EmailLabel.PENDING)
+                .label(overrideLabel != null ? overrideLabel : Email.EmailLabel.PENDING)
                 .category(request.getCategory() != null ? Email.EmailCategory.valueOf(request.getCategory()) : Email.EmailCategory.PRIMARY)
                 .snippet(request.getSnippet())
                 .hasAttachments(request.isHasAttachments())
@@ -417,6 +431,41 @@ public class EmailService {
         return emailRepository.findById(id)
                 .filter(e -> e.getUserId().equals(userId))
                 .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
+    }
+
+    @Transactional
+    public Email updateReadStatus(Long id, boolean isRead, Long userId) {
+        Email email = emailRepository.findById(id)
+                .filter(e -> e.getUserId().equals(userId))
+                .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
+
+        email.setRead(isRead);
+        Email saved = emailRepository.save(email);
+
+        // Đồng bộ trạng thái lên Nylas
+        String grantId = findGrantIdByUserId(userId);
+        if (grantId != null && !grantId.isEmpty() && email.getMessageId() != null && !email.getMessageId().isEmpty()) {
+            updateNylasMessageReadStatus(grantId, email.getMessageId(), isRead);
+        }
+
+        return saved;
+    }
+
+    private void updateNylasMessageReadStatus(String grantId, String messageId, boolean isRead) {
+        try {
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(nylasApiKey);
+
+            Map<String, Object> body = Map.of("unread", !isRead);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages/" + messageId;
+
+            restTemplate.exchange(url, HttpMethod.PUT, entity, Map.class);
+            log.info("Đã cập nhật trạng thái unread={} lên Nylas cho messageId={}", !isRead, messageId);
+        } catch (Exception e) {
+            log.error("Lỗi cập nhật trạng thái unread lên Nylas cho messageId={}: {}", messageId, e.getMessage());
+        }
     }
 
     @Transactional
@@ -596,7 +645,7 @@ public class EmailService {
                         .messageId(messageId)
                         .isRead(true)
                         .label(Email.EmailLabel.SENT)
-                        .category(Email.EmailCategory.PRIMARY)
+                        .category(Email.EmailCategory.SENT)
                         .snippet(snippet)
                         .hasAttachments(false)
                         .receivedAt(LocalDateTime.now())

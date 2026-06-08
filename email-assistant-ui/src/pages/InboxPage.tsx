@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getEmails, getSentEmails, getDraftEmails, getEmailStats, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails } from '../api/emailApi'
+import { getEmails, getSentEmails, getDraftEmails, getEmailStats, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails, updateReadStatus } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import ComposeModal from '../components/ComposeModal'
@@ -133,17 +133,28 @@ export default function InboxPage() {
     }
   }, [nylasStatus, data, currentPage, activeCategory])
 
-  // Gọi API phân tích AI khi chọn một email đang ở trạng thái PENDING
+  // Gọi API phân tích AI & cập nhật trạng thái đã đọc khi chọn một email
   useEffect(() => {
     if (selectedEmailId) {
       const email = data?.content?.find(e => e.id === selectedEmailId);
-      if (email && email.label === 'PENDING') {
-        analyzeEmail(selectedEmailId).catch(err => {
-          console.error("Failed to trigger AI analysis:", err);
-        });
+      if (email) {
+        if (email.label === 'PENDING') {
+          analyzeEmail(selectedEmailId).catch(err => {
+            console.error("Failed to trigger AI analysis:", err);
+          });
+        }
+        if (!email.isRead) {
+          updateReadStatus(selectedEmailId, true)
+            .then(() => {
+              refetch();
+            })
+            .catch(err => {
+              console.error("Failed to update read status:", err);
+            });
+        }
       }
     }
-  }, [selectedEmailId, data]);
+  }, [selectedEmailId, data, refetch]);
 
   const getThreadedEmails = (rawEmails: Email[]) => {
     if (!rawEmails) return [];
@@ -206,7 +217,7 @@ export default function InboxPage() {
       email.body?.toLowerCase().includes(searchLower)
     if (!matchesSearch) return false
 
-    const isUnread = email.status !== "READ"
+    const isUnread = !email.isRead
     if (filterTab === "read") return !isUnread
     if (filterTab === "unread") return isUnread
 

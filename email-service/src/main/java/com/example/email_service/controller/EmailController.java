@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -84,6 +85,15 @@ public class EmailController {
             @PathVariable Long id,
             @RequestHeader("X-User-Id") Long userId) {
         return ResponseEntity.ok(emailService.getEmailById(id, userId));
+    }
+
+    // Cập nhật trạng thái đọc/chưa đọc
+    @PatchMapping("/{id}/read")
+    public ResponseEntity<Email> updateReadStatus(
+            @PathVariable Long id,
+            @RequestParam boolean isRead,
+            @RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(emailService.updateReadStatus(id, isRead, userId));
     }
 
     // Phân tích email bằng AI khi click xem thư

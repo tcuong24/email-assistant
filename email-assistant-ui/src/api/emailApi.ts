@@ -51,6 +51,7 @@ export const analyzeEmail    = (id: number | string) => api.post<Email>(`/emails
 export const getNylasStatus  = () => api.get<{ connected: boolean }>('/emails/nylas/status')
 export const syncEmails      = () => api.post<{ status: string, message: string }>('/emails/sync')
 export const getThreadEmails = (threadId: string) => api.get<Email[]>(`/emails/thread/${threadId}`)
+export const updateReadStatus = (id: number | string, isRead: boolean) => api.patch<Email>(`/emails/${id}/read?isRead=${isRead}`)
 
 export type SendEmailPayload = {
     to: string

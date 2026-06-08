@@ -2,6 +2,7 @@ package com.example.email_service.entity;
 
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -87,6 +88,7 @@ public class Email {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "email", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @BatchSize(size = 50)
     @Builder.Default
     private List<Attachment> attachments = new ArrayList<>();
 
@@ -95,6 +97,6 @@ public class Email {
     }
 
     public enum EmailCategory {
-        PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
+        PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS, SENT
     }
 }
