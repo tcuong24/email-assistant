@@ -47,6 +47,13 @@ spring:
           filters:
             - AuthFilter
 
+        - id: email-service-tasks
+          uri: ${EMAIL_SERVICE_URI:http://email-service:8084}
+          predicates:
+            - Path=/api/v1/tasks/**
+          filters:
+            - AuthFilter
+
         - id: email-service-ws
           uri: ${EMAIL_SERVICE_URI:http://email-service:8084}
           predicates:
