@@ -269,6 +269,19 @@ public class EmailService {
             }
 
             log.info("Hoàn tất tiến trình đồng bộ chọn lọc cho userId {}", userId);
+            
+            // Tự động quét và phân tích các email PENDING còn sót lại
+            List<Email> pendingEmails = emailRepository.findByUserIdAndLabel(userId, Email.EmailLabel.PENDING);
+            if (!pendingEmails.isEmpty()) {
+                log.info("Tìm thấy {} email đang ở trạng thái PENDING. Bắt đầu gửi yêu cầu phân tích ngầm...", pendingEmails.size());
+                for (Email pending : pendingEmails) {
+                    try {
+                        this.triggerAiAnalysis(pending.getId(), userId);
+                    } catch (Exception e) {
+                        log.error("Lỗi kích hoạt phân tích cho email PENDING {}: {}", pending.getId(), e.getMessage());
+                    }
+                }
+            }
 
         } catch (Exception e) {
             log.error("Lỗi tổng quát trong đồng bộ chọn lọc cho userId {}: {}", userId, e.getMessage());

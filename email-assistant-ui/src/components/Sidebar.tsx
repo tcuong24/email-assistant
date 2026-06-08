@@ -11,6 +11,7 @@ import {
   Trash2,
   Settings,
   FolderPlus,
+  AlertCircle,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -123,6 +124,7 @@ export default function Sidebar({
   const moreEmailItems = [
     { id: "sent", label: "Đã gửi", icon: Send },
     { id: "drafts", label: "Thư nháp", icon: FileText },
+    { id: "spam", label: "Thư rác", icon: AlertCircle },
     { id: "deleted", label: "Đã xóa", icon: Trash2 },
   ]
 

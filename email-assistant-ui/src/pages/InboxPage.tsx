@@ -49,6 +49,7 @@ export default function InboxPage() {
   const [filterTab, setFilterTab] = useState("all")
   const [selectedEmailId, setSelectedEmailId] = useState<string | number | null>(null)
   const [activeTab, setActiveTab] = useState("PRIMARY")
+  const [refetchIntervalState, setRefetchIntervalState] = useState<number | false>(300000)
 
   // Đồng bộ trạng thái khi nhận tham số category từ URL
   useEffect(() => {
@@ -107,8 +108,18 @@ export default function InboxPage() {
       }
       return getEmails(undefined, currentPage, 50).then(r => r.data)
     },
-    refetchInterval: 300000,
+    refetchInterval: refetchIntervalState,
   })
+
+  // Cấu hình tần suất làm mới (polling 5 giây) nếu phát hiện có email đang chờ phân tích
+  useEffect(() => {
+    const hasPending = data?.content?.some(email => email.label === 'PENDING')
+    if (hasPending) {
+      setRefetchIntervalState(5000)
+    } else {
+      setRefetchIntervalState(300000)
+    }
+  }, [data])
 
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState("")
@@ -220,6 +231,8 @@ export default function InboxPage() {
       matchesCategory = labelUpper === "DELETED"
     } else if (activeCategory === "client") {
       matchesCategory = labelUpper === "NORMAL"
+    } else if (activeCategory === "spam") {
+      matchesCategory = labelUpper === "SPAM"
     } else {
       matchesCategory = true
     }
@@ -257,6 +270,7 @@ export default function InboxPage() {
       case 'drafts': return 'Drafts'
       case 'deleted': return 'Deleted'
       case 'client': return 'Client'
+      case 'spam': return 'Spam'
       default: return 'Email'
     }
   }
