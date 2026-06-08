@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import InboxPage from './pages/InboxPage'
 import EmailDetailPage from './pages/EmailDetailPage'
 import DashboardPage from './pages/DashboardPage'
+import TasksPage from './pages/TasksPage'
 import LoginPage from './pages/LoginForm'
 import OAuthCallback from './components/OAuthNylas'
 
@@ -28,6 +29,9 @@ export default function App() {
             }/>
             <Route path="/dashboard" element={
               <ProtectedRoute><DashboardPage /></ProtectedRoute>
+            }/>
+            <Route path="/tasks" element={
+              <ProtectedRoute><TasksPage /></ProtectedRoute>
             }/>
             <Route path="*" element={<Navigate to="/inbox" replace />} />
           </Routes>

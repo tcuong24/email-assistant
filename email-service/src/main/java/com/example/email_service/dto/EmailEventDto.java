@@ -47,7 +47,9 @@ public class EmailEventDto {
         private String threadId;
         private boolean isRead;
         private String category; // PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
+        private String threadContext;
     }
+
 
     // Nhận từ topic ai.result
     @Data

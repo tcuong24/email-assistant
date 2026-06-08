@@ -19,6 +19,10 @@ import {
   User,
   RefreshCw,
   Plus,
+  Columns,
+  CheckSquare,
+  Calendar,
+  BarChart3,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -89,22 +93,98 @@ export default function Sidebar({
     window.location.href = authUrl
   }
 
-  const menuItems = [
-    { id: "inbox", label: "Inbox", icon: Inbox, badge: inboxCount },
-    { id: "important", label: "Important", icon: Star },
-    { id: "sent", label: "Sent", icon: Send },
-    { id: "drafts", label: "Drafts", icon: FileText },
-    { id: "deleted", label: "Deleted", icon: Trash2 },
+  const handleItemClick = (id: string) => {
+    if (id === "dashboard") {
+      navigate("/dashboard")
+    } else if (id === "kanban") {
+      navigate("/tasks?view=kanban")
+    } else if (id === "all-tasks") {
+      navigate("/tasks?view=list")
+    } else if (id === "today-tasks") {
+      navigate("/tasks?view=today")
+    } else {
+      // PRIMARY, important, sent, drafts, deleted, client
+      const targetId = id === "PRIMARY" ? "inbox" : id
+      if (window.location.pathname === "/inbox" && onSelectItem) {
+        onSelectItem(targetId)
+      } else {
+        navigate(`/inbox?category=${id}`)
+      }
+    }
+  }
+
+  const emailItems = [
+    { id: "PRIMARY", label: "Hộp thư", icon: Inbox, badge: inboxCount },
+    { id: "important", label: "Quan trọng", icon: Star },
   ]
 
-  const folders = [
-    { id: "add-folder", label: "Add Folder", icon: FolderPlus },
-    { id: "client", label: "Client", icon: Folder },
+  const taskItems = [
+    { id: "kanban", label: "Kanban", icon: Columns },
+    { id: "all-tasks", label: "Tất cả task", icon: CheckSquare },
+    { id: "today-tasks", label: "Đến hạn hôm nay", icon: Calendar },
+  ]
+
+  const analyticsItems = [
+    { id: "dashboard", label: "Dashboard", icon: BarChart3 },
   ]
 
   const getInitials = (email?: string) => {
     if (!email) return "?"
     return email.slice(0, 2).toUpperCase()
+  }
+
+  const renderNavButton = (item: { id: string, label: string, icon: any, badge?: number }) => {
+    const Icon = item.icon
+    // Chuẩn hóa active check
+    const normalizedActiveItem = activeItem === "inbox" ? "PRIMARY" : activeItem
+    const isActive = normalizedActiveItem === item.id
+
+    return (
+      <button
+        key={item.id}
+        onClick={() => handleItemClick(item.id)}
+        className="flex items-center justify-between rounded-lg transition-all duration-200 group w-full"
+        style={{
+          padding: collapsed ? "10px" : "10px 12px",
+          justifyContent: collapsed ? "center" : "space-between",
+          background: isActive ? "rgba(255,255,255,0.1)" : "transparent",
+          color: isActive ? "#FFFFFF" : "var(--text-sidebar)",
+          borderRadius: 8,
+          cursor: "pointer",
+        }}
+        title={collapsed ? item.label : undefined}
+      >
+        <div className="flex items-center gap-3">
+          <Icon
+            className="w-[18px] h-[18px] flex-shrink-0"
+            style={{
+              color: isActive ? "#FFFFFF" : "var(--text-sidebar)",
+            }}
+          />
+          {!collapsed && (
+            <span
+              className="text-sm transition-colors"
+              style={{ fontWeight: isActive ? 600 : 500 }}
+            >
+              {item.label}
+            </span>
+          )}
+        </div>
+        {!collapsed && item.badge !== undefined && item.badge > 0 && (
+          <span
+            className="text-white text-[11px] font-bold rounded-full"
+            style={{
+              background: "var(--accent-primary)",
+              padding: "2px 7px",
+              minWidth: 20,
+              textAlign: "center",
+            }}
+          >
+            {item.badge}
+          </span>
+        )}
+      </button>
+    )
   }
 
   return (
@@ -136,7 +216,7 @@ export default function Sidebar({
           )}
           <button
             onClick={() => setCollapsed((c) => !c)}
-            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white cursor-pointer"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? (
@@ -171,105 +251,43 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Primary Navigation */}
-        <nav className="flex flex-col gap-0.5" style={{ padding: "0 var(--space-sm)" }}>
-          {menuItems.map((item) => {
-            const Icon = item.icon
-            const isActive = activeItem === item.id
-            return (
-              <button
-                key={item.id}
-                onClick={() => onSelectItem?.(item.id)}
-                className="flex items-center justify-between rounded-lg transition-all duration-200 group"
-                style={{
-                  padding: collapsed ? "10px" : "10px 12px",
-                  justifyContent: collapsed ? "center" : "space-between",
-                  background: isActive ? "rgba(255,255,255,0.1)" : "transparent",
-                  color: isActive ? "#FFFFFF" : "var(--text-sidebar)",
-                  borderRadius: 8,
-                }}
-                title={collapsed ? item.label : undefined}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon
-                    className="w-[18px] h-[18px] flex-shrink-0"
-                    style={{
-                      color: isActive ? "#FFFFFF" : "var(--text-sidebar)",
-                    }}
-                  />
-                  {!collapsed && (
-                    <span
-                      className="text-sm transition-colors"
-                      style={{ fontWeight: isActive ? 600 : 500 }}
-                    >
-                      {item.label}
-                    </span>
-                  )}
-                </div>
-                {!collapsed && item.badge !== undefined && item.badge > 0 && (
-                  <span
-                    className="text-white text-[11px] font-bold rounded-full"
-                    style={{
-                      background: "var(--accent-primary)",
-                      padding: "2px 7px",
-                      minWidth: 20,
-                      textAlign: "center",
-                    }}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </nav>
-
-        {/* Divider */}
-        <div
-          className="mx-auto"
-          style={{
-            width: collapsed ? "60%" : "calc(100% - 24px)",
-            height: 1,
-            background: "rgba(255,255,255,0.08)",
-          }}
-        />
-
-        {/* Folders */}
-        <div className="flex flex-col gap-1" style={{ padding: "0 var(--space-sm)" }}>
+        {/* EMAIL GROUP */}
+        <div className="flex flex-col gap-0.5" style={{ padding: "0 var(--space-sm)" }}>
           {!collapsed && (
             <span
-              className="text-[11px] font-semibold uppercase tracking-widest px-3 mb-1"
+              className="text-[10px] font-bold uppercase tracking-wider px-3 mb-1 block"
               style={{ color: "rgba(255,255,255,0.3)" }}
             >
-              Folders
+              Email
             </span>
           )}
-          {folders.map((folder) => {
-            const Icon = folder.icon
-            const isActive = activeItem === folder.id
-            return (
-              <button
-                key={folder.id}
-                onClick={() => onSelectItem?.(folder.id)}
-                className="flex items-center gap-3 rounded-lg transition-all duration-200"
-                style={{
-                  padding: collapsed ? "10px" : "10px 12px",
-                  justifyContent: collapsed ? "center" : "flex-start",
-                  background: isActive ? "rgba(255,255,255,0.1)" : "transparent",
-                  color: isActive ? "#FFFFFF" : "var(--text-sidebar)",
-                  borderRadius: 8,
-                }}
-                title={collapsed ? folder.label : undefined}
-              >
-                <Icon className="w-[18px] h-[18px] flex-shrink-0" />
-                {!collapsed && (
-                  <span className="text-sm" style={{ fontWeight: isActive ? 600 : 500 }}>
-                    {folder.label}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+          {emailItems.map(renderNavButton)}
+        </div>
+
+        {/* CÔNG VIỆC GROUP */}
+        <div className="flex flex-col gap-0.5" style={{ padding: "0 var(--space-sm)" }}>
+          {!collapsed && (
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider px-3 mb-1 block"
+              style={{ color: "rgba(255,255,255,0.3)" }}
+            >
+              Công việc
+            </span>
+          )}
+          {taskItems.map(renderNavButton)}
+        </div>
+
+        {/* PHÂN TÍCH GROUP */}
+        <div className="flex flex-col gap-0.5" style={{ padding: "0 var(--space-sm)" }}>
+          {!collapsed && (
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider px-3 mb-1 block"
+              style={{ color: "rgba(255,255,255,0.3)" }}
+            >
+              Phân tích
+            </span>
+          )}
+          {analyticsItems.map(renderNavButton)}
         </div>
       </div>
 

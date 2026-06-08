@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { getEmails, getSentEmails, getDraftEmails, getEmailStats, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails, updateReadStatus } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
@@ -40,12 +40,27 @@ const CATEGORY_TABS = [
 ]
 
 export default function InboxPage() {
+  const [searchParams] = useSearchParams()
+  const categoryParam = searchParams.get('category')
+
   const [activeCategory, setActiveCategory] = useState("inbox")
   const [searchQuery, setSearchQuery] = useState("")
   const autoSyncTriggered = useRef(false)
   const [filterTab, setFilterTab] = useState("all")
   const [selectedEmailId, setSelectedEmailId] = useState<string | number | null>(null)
   const [activeTab, setActiveTab] = useState("PRIMARY")
+
+  // Đồng bộ trạng thái khi nhận tham số category từ URL
+  useEffect(() => {
+    if (categoryParam) {
+      if (categoryParam === "PRIMARY" || categoryParam === "inbox") {
+        setActiveCategory("inbox")
+        setActiveTab("PRIMARY")
+      } else {
+        setActiveCategory(categoryParam.toLowerCase())
+      }
+    }
+  }, [categoryParam])
 
   // Quản lý trạng thái trang riêng biệt cho từng danh mục
   const [pages, setPages] = useState<{ [key: string]: number }>({})
@@ -55,6 +70,7 @@ export default function InboxPage() {
 
   const currentKey = activeCategory === "inbox" ? activeTab : activeCategory
   const currentPage = pages[currentKey] || 0
+
 
   const setPageForCurrentKey = (newPage: number) => {
     setPages(prev => ({

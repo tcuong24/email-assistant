@@ -61,3 +61,22 @@ export type SendEmailPayload = {
 }
 
 export const sendEmail       = (data: SendEmailPayload) => api.post<Email>('/emails/send', data)
+
+export type Task = {
+    id: number | string
+    userId: number | string
+    title: string
+    description?: string
+    status: 'TODO' | 'IN_PROGRESS' | 'DONE'
+    priority: 'HIGH' | 'MEDIUM' | 'LOW'
+    category?: string
+    dueDate?: string
+    emailId?: number | string
+    createdAt?: string
+    updatedAt?: string
+}
+
+export const getTasks = () => api.get<Task[]>('/tasks')
+export const createTask = (data: Partial<Task>) => api.post<Task>('/tasks', data)
+export const updateTaskStatus = (id: number | string, status: 'TODO' | 'IN_PROGRESS' | 'DONE') => api.put<Task>(`/tasks/${id}/status?status=${status}`)
+export const deleteTask = (id: number | string) => api.delete<void>(`/tasks/${id}`)

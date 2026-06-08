@@ -23,9 +23,11 @@ import com.example.email_service.dto.EmailEventDto.ReceiveEmailRequest;
 import com.example.email_service.dto.EmailEventDto.EmailNotification;
 import com.example.email_service.entity.Email;
 import com.example.email_service.entity.NylasConnection;
+import com.example.email_service.entity.Task;
 import com.example.email_service.repository.EmailRepository;
 import com.example.email_service.repository.NylasConnectionRepository;
 import com.example.email_service.repository.AttachmentRepository;
+import com.example.email_service.repository.TaskRepository;
 import com.example.email_service.entity.Attachment;
 
 import jakarta.transaction.Transactional;
@@ -49,6 +51,8 @@ public class EmailService {
     private final NotificationService notificationService;
     private final AttachmentRepository attachmentRepository;
     private final CloudinaryService cloudinaryService;
+    private final TaskRepository taskRepository;
+
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -325,7 +329,28 @@ public class EmailService {
                 .build();
 
         final Email savedEmail = emailRepository.save(email);
-        log.info("Email {} nhận thành công (chờ phân tích AI khi xem thư)", savedEmail.getId());
+        log.info("Email {} nhận thành công", savedEmail.getId());
+
+        if (savedEmail.getLabel() == Email.EmailLabel.PENDING) {
+            if (savedEmail.getCategory() == Email.EmailCategory.PRIMARY || savedEmail.getCategory() == Email.EmailCategory.UPDATES) {
+                // Tự động kích hoạt phân tích AI ngầm sau khi commit transaction
+                if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            triggerAiAnalysis(savedEmail.getId(), userId);
+                        }
+                    });
+                } else {
+                    triggerAiAnalysis(savedEmail.getId(), userId);
+                }
+            } else {
+                // Không phải PRIMARY/UPDATES -> Tự động đánh dấu là NORMAL và không gửi sang AI
+                savedEmail.setLabel(Email.EmailLabel.NORMAL);
+                savedEmail.setSummary("Tự động bỏ qua phân tích AI.");
+                emailRepository.save(savedEmail);
+            }
+        }
 
         // Gửi thông báo WebSocket ngay lập tức (sau khi commit transaction để tránh tranh chấp dữ liệu)
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
@@ -377,6 +402,52 @@ public class EmailService {
             emailRepository.save(email);
             log.info("Email {} cập nhật AI result: {}",
                     email.getId(), email.getLabel());
+
+            // Tách các ActionItem và lưu vào bảng tasks
+            if (event.getActionItems() != null) {
+                for (String rawItem : event.getActionItems()) {
+                    String priority = "LOW";
+                    String dueDate = "Không rõ";
+                    String title = rawItem;
+
+                    try {
+                        if (rawItem.startsWith("[")) {
+                            int firstClose = rawItem.indexOf("]");
+                            if (firstClose > 0) {
+                                priority = rawItem.substring(1, firstClose).trim();
+                                String rest = rawItem.substring(firstClose + 1).trim();
+                                if (rest.startsWith("[Hạn:")) {
+                                    int secondClose = rest.indexOf("]");
+                                    if (secondClose > 0) {
+                                        dueDate = rest.substring(5, secondClose).trim();
+                                        title = rest.substring(secondClose + 1).trim();
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Lỗi phân tách action item '{}': {}", rawItem, e.getMessage());
+                    }
+
+                    Task.TaskPriority pEnum = Task.TaskPriority.LOW;
+                    try {
+                        pEnum = Task.TaskPriority.valueOf(priority.toUpperCase());
+                    } catch (Exception e) {
+                        // fallback
+                    }
+
+                    Task task = Task.builder()
+                            .userId(email.getUserId())
+                            .emailId(email.getId())
+                            .title(title)
+                            .priority(pEnum)
+                            .dueDate(dueDate)
+                            .status(Task.TaskStatus.TODO)
+                            .category(email.getCategory() != null ? email.getCategory().name() : "PRIMARY")
+                            .build();
+                    taskRepository.save(task);
+                }
+            }
 
             // Push notification qua WebSocket
             try {
@@ -475,6 +546,23 @@ public class EmailService {
                 .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
 
         if (email.getLabel() == Email.EmailLabel.PENDING && (email.getSummary() == null || email.getSummary().isEmpty())) {
+            // Lấy ngữ cảnh hội thoại (threadContext) từ các email cũ trong cùng luồng
+            String threadContext = "";
+            if (email.getThreadId() != null && !email.getThreadId().isEmpty()) {
+                List<Email> threadEmails = emailRepository.findByThreadIdAndUserIdOrderByReceivedAtAsc(email.getThreadId(), userId);
+                StringBuilder contextBuilder = new StringBuilder();
+                for (Email oldEmail : threadEmails) {
+                    if (oldEmail.getId().equals(email.getId())) {
+                        break; // Chỉ lấy các email nhận trước email hiện tại
+                    }
+                    contextBuilder.append("From: ").append(oldEmail.getFromName() != null ? oldEmail.getFromName() : oldEmail.getFromAddress()).append("\n");
+                    contextBuilder.append("Subject: ").append(oldEmail.getSubject()).append("\n");
+                    contextBuilder.append("Snippet: ").append(oldEmail.getSnippet() != null ? oldEmail.getSnippet() : "").append("\n");
+                    contextBuilder.append("---\n");
+                }
+                threadContext = contextBuilder.toString();
+            }
+
             EmailReceivedEvent event = EmailReceivedEvent.builder()
                     .emailId(email.getId())
                     .fromAddress(email.getFromAddress())
@@ -488,10 +576,11 @@ public class EmailService {
                     .hasAttachments(email.isHasAttachments())
                     .receivedAt(email.getReceivedAt() != null ? email.getReceivedAt().toString() : null)
                     .category(email.getCategory().name())
+                    .threadContext(threadContext)
                     .build();
 
             kafkaTemplate.send(emailReceivedTopic, String.valueOf(email.getId()), event);
-            log.info("Yêu cầu phân tích AI cho Email {} đã được gửi lên Kafka", email.getId());
+            log.info("Yêu cầu phân tích AI cho Email {} đã được gửi lên Kafka với threadContext (length={})", email.getId(), threadContext.length());
         }
         return email;
     }
