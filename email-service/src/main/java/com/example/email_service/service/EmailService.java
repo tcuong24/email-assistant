@@ -208,6 +208,7 @@ public class EmailService {
             String socialFolderId = null;
             String forumsFolderId = null;
             String sentFolderId = null;
+            String spamFolderId = null;
 
             for (Map<String, Object> folder : folders) {
                 String name = (String) folder.get("name");
@@ -226,6 +227,8 @@ public class EmailService {
                     forumsFolderId = id;
                 } else if ("SENT".equalsIgnoreCase(name) || (name != null && name.toLowerCase().contains("sent"))) {
                     sentFolderId = id;
+                } else if ("SPAM".equalsIgnoreCase(name) || (name != null && name.toLowerCase().contains("spam"))) {
+                    spamFolderId = id;
                 }
             }
 
@@ -266,6 +269,12 @@ public class EmailService {
             if (sentFolderId != null) {
                 log.info("Đồng bộ thư đã gửi (Sent) sâu cho userId {}", userId);
                 syncFolderEmails(grantId, userId, sentFolderId, 5, Email.EmailCategory.SENT, nylasApiKey, nylasApiUrl, headers);
+            }
+
+            // 7. Thư rác (Spam) (Nông: tối đa 1 trang = 50 thư)
+            if (spamFolderId != null) {
+                log.info("Đồng bộ thư rác (Spam) nông cho userId {}", userId);
+                syncFolderEmails(grantId, userId, spamFolderId, 1, Email.EmailCategory.SPAM, nylasApiKey, nylasApiUrl, headers);
             }
 
             log.info("Hoàn tất tiến trình đồng bộ chọn lọc cho userId {}", userId);
@@ -358,9 +367,14 @@ public class EmailService {
                     triggerAiAnalysis(savedEmail.getId(), userId);
                 }
             } else {
-                // Không phải PRIMARY/UPDATES -> Tự động đánh dấu là NORMAL và không gửi sang AI
-                savedEmail.setLabel(Email.EmailLabel.NORMAL);
-                savedEmail.setSummary("Tự động bỏ qua phân tích AI.");
+                // Không phải PRIMARY/UPDATES -> Tự động đánh dấu nhãn tương ứng và không gửi sang AI
+                if (savedEmail.getCategory() == Email.EmailCategory.SPAM) {
+                    savedEmail.setLabel(Email.EmailLabel.SPAM);
+                    savedEmail.setSummary("Thư rác từ Gmail.");
+                } else {
+                    savedEmail.setLabel(Email.EmailLabel.NORMAL);
+                    savedEmail.setSummary("Tự động bỏ qua phân tích AI.");
+                }
                 emailRepository.save(savedEmail);
             }
         }
@@ -492,6 +506,50 @@ public class EmailService {
         return saved;
     }
 
+    @Transactional
+    public void bulkUpdate(List<Long> emailIds, String label, String category, Boolean isRead, Long userId) {
+        if (emailIds == null || emailIds.isEmpty()) {
+            return;
+        }
+
+        List<Email> emails = emailRepository.findAllById(emailIds);
+        for (Email email : emails) {
+            if (!email.getUserId().equals(userId)) {
+                continue;
+            }
+
+            if (label != null) {
+                try {
+                    email.setLabel(Email.EmailLabel.valueOf(label.toUpperCase().strip()));
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid label: {}", label);
+                }
+            }
+
+            if (category != null) {
+                try {
+                    email.setCategory(Email.EmailCategory.valueOf(category.toUpperCase().strip()));
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid category: {}", category);
+                }
+            }
+
+            if (isRead != null) {
+                email.setRead(isRead);
+            }
+
+            emailRepository.save(email);
+
+            // Đồng bộ trạng thái đọc lên Nylas
+            String grantId = findGrantIdByUserId(userId);
+            if (grantId != null && !grantId.isEmpty() && email.getMessageId() != null && !email.getMessageId().isEmpty()) {
+                if (isRead != null) {
+                    updateNylasMessageReadStatus(grantId, email.getMessageId(), isRead);
+                }
+            }
+        }
+    }
+
     private void updateNylasMessageReadStatus(String grantId, String messageId, boolean isRead) {
         try {
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
@@ -557,6 +615,7 @@ public class EmailService {
 
     public Email.EmailCategory extractCategory(List<String> folders) {
         if (folders == null) return Email.EmailCategory.PRIMARY;
+        if (folders.contains("SPAM") || folders.contains("spam")) return Email.EmailCategory.SPAM;
         if (folders.contains("CATEGORY_PROMOTIONS")) return Email.EmailCategory.PROMOTIONS;
         if (folders.contains("CATEGORY_SOCIAL"))     return Email.EmailCategory.SOCIAL;
         if (folders.contains("CATEGORY_UPDATES"))    return Email.EmailCategory.UPDATES;

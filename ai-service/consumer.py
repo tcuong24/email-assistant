@@ -3,6 +3,7 @@ import os
 import time
 import queue
 import threading
+import re
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
 from analyzer import analyze_emails_batch
@@ -26,6 +27,62 @@ ACTION_KEYWORDS = [
 def has_action_item(subject: str, body: str) -> bool:
     text = f"{subject or ''} {body or ''}".lower()
     return any(kw in text for kw in ACTION_KEYWORDS)
+
+SPAM_SENDERS = [
+    r"newsletter@",
+    r"noreply@promo",
+    r"no-reply@promo",
+    r"marketing@",
+    r"promo@",
+    r"promotion@",
+    r"offers@",
+    r"deals@",
+    r"quangcao",
+    r"advertisement",
+    r"spam@",
+]
+
+SPAM_KEYWORDS = [
+    r"\bkhuyen\s+mai\b",
+    r"\bkhuyến\s+mãi\b",
+    r"\bưu\s+đãi\b",
+    r"\buu\s+dai\b",
+    r"\bquảng\s+cáo\b",
+    r"\bquang\s+cao\b",
+    r"\bgiảm\s+giá\b",
+    r"\bgiam\s+gia\b",
+    r"\bcoupon\b",
+    r"\bvoucher\b",
+    r"\bmua\s+ngay\b",
+    r"\bclick\s+here\b",
+    r"\bunsubscribe\b",
+    r"\bhủy\s+đăng\s+ký\b",
+    r"\bhuy\s+dang\s+ky\b",
+]
+
+def pre_classify(from_address: str, from_name: str, subject: str, body: str) -> str:
+    """
+    Phân loại nhanh bằng luật (Rule-based pre-classification)
+    Trả về 'SPAM' nếu chắc chắn là spam/quảng cáo, ngược lại trả về None
+    """
+    sender = f"{from_name or ''} <{from_address or ''}>".lower()
+    subject = (subject or "").lower()
+    body = (body or "").lower()
+
+    # 1. Kiểm tra người gửi (sender)
+    for pattern in SPAM_SENDERS:
+        if re.search(pattern, sender):
+            return "SPAM"
+
+    # 2. Kiểm tra từ khóa trong tiêu đề và nội dung (unsubscribe, khuyến mãi...)
+    if "unsubscribe" in body or "hủy đăng ký" in body or "huy dang ky" in body:
+        return "SPAM"
+
+    for pattern in SPAM_KEYWORDS:
+        if re.search(pattern, subject) or re.search(pattern, body[:500]):
+            return "SPAM"
+
+    return None
 
 def batch_worker():
     """
@@ -98,6 +155,13 @@ def batch_worker():
                     if email_id in results_by_id:
                         res = results_by_id[email_id]
                         label = res.get("label", "NORMAL").upper()
+                        confidence = res.get("confidence", 1.0)
+                        reason = res.get("reason", "")
+                        
+                        if confidence < 0.7:
+                            print(f"[Worker] AI gán nhãn {label} với độ tin cậy thấp ({confidence} < 0.7, lý do: {reason}) cho email {email_id}. Hạ cấp về NORMAL.")
+                            label = "NORMAL"
+                        
                         summary = res.get("summary", "Đã phân tích hoàn tất.")
                         suggested_replies = res.get("suggested_replies", [])
                         
@@ -213,6 +277,27 @@ def start_consumer():
             email_id = data["emailId"]
             subject  = data.get("subject", "")
             print(f"[Consumer] Nhận yêu cầu phân tích email {email_id}: {subject[:50]}")
+            
+            # Chạy Rule-based pre-classification trước
+            from_address = data.get("fromAddress", "")
+            from_name = data.get("fromName", "")
+            body = data.get("body", "")
+            
+            rule_label = pre_classify(from_address, from_name, subject, body)
+            if rule_label == "SPAM":
+                print(f"[Consumer] Phát hiện spam bằng bộ lọc luật cho email {email_id}. Gửi thẳng kết quả nhãn SPAM.")
+                publish_ai_result(
+                    email_id=email_id,
+                    label="SPAM",
+                    summary="Email spam (Phát hiện tự động bằng bộ lọc hệ thống).",
+                    suggested_replies=[],
+                    action_items=[],
+                    user_id=data.get("userId"),
+                    received_at=data.get("receivedAt"),
+                    should_create_task=False,
+                    task_title=None
+                )
+                continue
             
             # Đẩy tin nhắn vào hàng đợi để gộp lô chạy ngầm
             email_queue.put(data)

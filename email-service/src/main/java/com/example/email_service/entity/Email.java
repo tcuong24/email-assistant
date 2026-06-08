@@ -99,6 +99,6 @@ public class Email {
     }
 
     public enum EmailCategory {
-        PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS, SENT
+        PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS, SENT, SPAM, DELETED
     }
 }

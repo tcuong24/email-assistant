@@ -1,4 +1,4 @@
-import { Paperclip, Star } from "lucide-react"
+import { Paperclip, Star, Image, FileText, File, FileCode, Video, Music } from "lucide-react"
 import LabelBadge from "./LabelBadge"
 import type { Attachment } from "../api/emailApi"
 
@@ -27,6 +27,9 @@ interface EmailSectionProps {
   isSelected: boolean
   layoutMode: "horizontal" | "compact"
   onClick: () => void
+  isChecked?: boolean
+  onCheckToggle?: (id: string | number, e: React.MouseEvent) => void
+  onStarToggle?: (id: string | number, e: React.MouseEvent) => void
 }
 
 // Generate a consistent color from the email address
@@ -78,7 +81,38 @@ const formatTime = (dateStr: string) => {
   })
 }
 
-const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionProps) => {
+const getAttachmentIcon = (contentType: string) => {
+  const ct = (contentType || "").toLowerCase()
+  if (ct.startsWith("image/")) {
+    return <Image className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+  }
+  if (ct.startsWith("video/")) {
+    return <Video className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+  }
+  if (ct.startsWith("audio/")) {
+    return <Music className="w-3.5 h-3.5 text-teal-500 flex-shrink-0" />
+  }
+  if (ct.includes("pdf")) {
+    return <FileText className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+  }
+  if (ct.includes("json") || ct.includes("javascript") || ct.includes("html") || ct.includes("xml")) {
+    return <FileCode className="w-3.5 h-3.5 text-yellow-600 flex-shrink-0" />
+  }
+  if (ct.includes("word") || ct.includes("officedocument.wordprocessingml")) {
+    return <FileText className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+  }
+  return <File className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+}
+
+const EmailSection = ({ 
+  email, 
+  isSelected, 
+  layoutMode, 
+  onClick,
+  isChecked = false,
+  onCheckToggle,
+  onStarToggle
+}: EmailSectionProps) => {
   const isUnread = email.isRead !== true ? true : false;
 
   // ─── Horizontal Layout (Full-width Gmail style) ───
@@ -89,16 +123,16 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
         className="flex items-center cursor-pointer select-none transition-colors duration-100 group"
         style={{
           padding: "8px 16px 8px 8px",
-          background: isSelected ? "#C2DBFF" : isUnread ? "var(--bg-panel)" : "var(--bg-main)",
+          background: isSelected ? "#C2DBFF" : isChecked ? "#E0F2FE" : isUnread ? "var(--bg-panel)" : "var(--bg-main)",
           borderBottom: "1px solid #F0F0F0",
           minHeight: 44,
         }}
         onMouseEnter={(e) => {
-          if (!isSelected)
+          if (!isSelected && !isChecked)
             (e.currentTarget as HTMLDivElement).style.background = "#F5F5F5"
         }}
         onMouseLeave={(e) => {
-          if (!isSelected)
+          if (!isSelected && !isChecked)
             (e.currentTarget as HTMLDivElement).style.background = isUnread ? "var(--bg-panel)" : "var(--bg-main)"
         }}
       >
@@ -106,13 +140,25 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
         <div className="flex items-center gap-1 flex-shrink-0" style={{ width: 56 }}>
           <input
             type="checkbox"
-            className="w-[18px] h-[18px] rounded cursor-pointer accent-[var(--accent-primary)]"
+            checked={isChecked}
+            onChange={(e) => {
+              e.stopPropagation();
+              if (onCheckToggle) {
+                onCheckToggle(email.id, e as any);
+              }
+            }}
             onClick={(e) => e.stopPropagation()}
+            className="w-[18px] h-[18px] rounded cursor-pointer accent-[var(--accent-primary)]"
             style={{ margin: "0 4px" }}
           />
           {/* Star */}
           <button
-            onClick={(e) => { e.stopPropagation() }}
+            onClick={(e) => { 
+              e.stopPropagation();
+              if (onStarToggle) {
+                onStarToggle(email.id, e);
+              }
+            }}
             className="p-0.5 transition-colors flex-shrink-0"
             style={{ color: email.label === 'IMPORTANT' ? '#F59E0B' : '#D1D5DB' }}
           >
@@ -144,28 +190,48 @@ const EmailSection = ({ email, isSelected, layoutMode, onClick }: EmailSectionPr
           )}
         </div>
 
-        {/* Subject + Preview */}
-        <div className="flex-1 min-w-0 flex items-baseline gap-1 truncate" style={{ fontSize: 14 }}>
-          <span
-            className="truncate flex-shrink-0"
-            style={{
-              color: "var(--text-primary)",
-              fontWeight: isUnread ? 700 : 400,
-              maxWidth: "40%",
-            }}
-          >
-            {email.subject}
-          </span>
-          <span style={{ color: "var(--text-secondary)", fontWeight: 400, flexShrink: 0 }}> - </span>
-          <span
-            className="truncate"
-            style={{
-              color: "var(--text-secondary)",
-              fontWeight: 400,
-            }}
-          >
-            {email.summary || email.snippet || "Thư không có nội dung."}
-          </span>
+        {/* Subject + Preview & Attachments */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center gap-1" style={{ paddingRight: 12 }}>
+          <div className="flex items-baseline gap-1 truncate" style={{ fontSize: 14 }}>
+            <span
+              className="truncate flex-shrink-0"
+              style={{
+                color: "var(--text-primary)",
+                fontWeight: isUnread ? 700 : 400,
+                maxWidth: "40%",
+              }}
+            >
+              {email.subject}
+            </span>
+            <span style={{ color: "var(--text-secondary)", fontWeight: 400, flexShrink: 0 }}> - </span>
+            <span
+              className="truncate"
+              style={{
+                color: "var(--text-secondary)",
+                fontWeight: 400,
+              }}
+            >
+              {email.summary || email.snippet || "Thư không có nội dung."}
+            </span>
+          </div>
+
+          {email.attachments && email.attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
+              {email.attachments.map((att, idx) => (
+                <a
+                  key={idx}
+                  href={att.r2Url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-gray-700 font-medium no-underline decoration-transparent"
+                  style={{ maxWidth: 220 }}
+                >
+                  {getAttachmentIcon(att.contentType)}
+                  <span className="truncate">{att.filename}</span>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Label */}

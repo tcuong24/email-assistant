@@ -96,6 +96,23 @@ public class EmailController {
         return ResponseEntity.ok(emailService.updateReadStatus(id, isRead, userId));
     }
 
+    @lombok.Data
+    public static class BulkUpdateRequest {
+        private List<Long> emailIds;
+        private String label;
+        private String category;
+        private Boolean isRead;
+    }
+
+    // Cập nhật hàng loạt email (đánh dấu quan trọng, spam, xóa, đọc/chưa đọc)
+    @PatchMapping("/bulk")
+    public ResponseEntity<Void> bulkUpdateEmails(
+            @RequestBody @Valid BulkUpdateRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        emailService.bulkUpdate(request.getEmailIds(), request.getLabel(), request.getCategory(), request.getIsRead(), userId);
+        return ResponseEntity.ok().build();
+    }
+
     // Phân tích email bằng AI khi click xem thư
     @PostMapping("/{id}/analyze")
     public ResponseEntity<Email> analyzeEmail(

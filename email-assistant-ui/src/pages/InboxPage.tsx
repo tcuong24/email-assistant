@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { getEmails, getSentEmails, getDraftEmails, getEmailStats, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails, updateReadStatus, createTask } from '../api/emailApi'
+import { getEmails, getSentEmails, getDraftEmails, getEmailStats, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails, updateReadStatus, createTask, bulkUpdateEmails } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import ComposeModal from '../components/ComposeModal'
@@ -20,6 +20,9 @@ import {
   CornerUpRight,
   RefreshCw,
   MailOpen,
+  Mail,
+  Archive,
+  AlertOctagon,
   X,
   Inbox,
   Tag,
@@ -31,6 +34,7 @@ import {
   Send,
   ChevronLeft,
   ChevronRight,
+  MoreVertical,
 } from 'lucide-react'
 
 const CATEGORY_TABS = [
@@ -54,6 +58,67 @@ export default function InboxPage() {
   const [refetchIntervalState, setRefetchIntervalState] = useState<number | false>(300000)
 
   const [createdTaskKeys, setCreatedTaskKeys] = useState<string[]>([])
+  const [checkedEmailIds, setCheckedEmailIds] = useState<Set<string | number>>(new Set())
+
+  const handleCheckAll = (emailsInView: Email[]) => {
+    if (checkedEmailIds.size === emailsInView.length) {
+      setCheckedEmailIds(new Set())
+    } else {
+      setCheckedEmailIds(new Set(emailsInView.map(e => e.id)))
+    }
+  }
+
+  const handleCheckToggle = (id: string | number) => {
+    setCheckedEmailIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleStarToggle = async (id: string | number, currentLabel: string) => {
+    const nextLabel = currentLabel === "IMPORTANT" ? "NORMAL" : "IMPORTANT"
+    try {
+      await bulkUpdateEmails({ emailIds: [id], label: nextLabel })
+      refetch()
+    } catch (err) {
+      console.error("Failed to toggle star", err)
+      toast.error("Không thể đánh dấu quan trọng.")
+    }
+  }
+
+  const handleBulkAction = async (action: 'spam' | 'important' | 'delete' | 'archive' | 'read' | 'unread') => {
+    if (checkedEmailIds.size === 0) return
+
+    const emailIds = Array.from(checkedEmailIds)
+    const promise = (async () => {
+      if (action === 'spam') {
+        await bulkUpdateEmails({ emailIds, label: 'SPAM', category: 'SPAM' })
+      } else if (action === 'important') {
+        await bulkUpdateEmails({ emailIds, label: 'IMPORTANT' })
+      } else if (action === 'delete') {
+        await bulkUpdateEmails({ emailIds, category: 'DELETED' })
+      } else if (action === 'archive') {
+        await bulkUpdateEmails({ emailIds, label: 'NORMAL' })
+      } else if (action === 'read') {
+        await bulkUpdateEmails({ emailIds, isRead: true })
+      } else if (action === 'unread') {
+        await bulkUpdateEmails({ emailIds, isRead: false })
+      }
+      setCheckedEmailIds(new Set())
+      refetch()
+    })()
+
+    toast.promise(promise, {
+      loading: 'Đang cập nhật các thư đã chọn...',
+      success: 'Đã cập nhật thành công!',
+      error: 'Cập nhật thất bại.'
+    })
+  }
 
   const parseActionItem = (rawItem: string) => {
     let priority: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW'
@@ -274,22 +339,22 @@ export default function InboxPage() {
   const filteredData = data?.content?.filter(email => {
     let matchesCategory = false
     const labelUpper = email.label?.toUpperCase()
+    const categoryUpper = (email.category || "PRIMARY").toUpperCase()
 
     if (activeCategory === "inbox") {
-      const emailCategory = (email.category || "PRIMARY").toUpperCase()
-      matchesCategory = labelUpper !== "SPAM" && labelUpper !== "DELETED" && emailCategory === activeTab
+      matchesCategory = categoryUpper !== "SPAM" && categoryUpper !== "SENT" && categoryUpper !== "DRAFTS" && categoryUpper !== "DELETED" && categoryUpper === activeTab
     } else if (activeCategory === "important") {
       matchesCategory = labelUpper === "IMPORTANT"
     } else if (activeCategory === "sent") {
-      matchesCategory = labelUpper === "SENT"
+      matchesCategory = categoryUpper === "SENT"
     } else if (activeCategory === "drafts") {
-      matchesCategory = labelUpper === "DRAFTS"
+      matchesCategory = categoryUpper === "DRAFTS"
     } else if (activeCategory === "deleted") {
-      matchesCategory = labelUpper === "DELETED"
+      matchesCategory = categoryUpper === "DELETED"
     } else if (activeCategory === "client") {
       matchesCategory = labelUpper === "NORMAL"
     } else if (activeCategory === "spam") {
-      matchesCategory = labelUpper === "SPAM"
+      matchesCategory = categoryUpper === "SPAM"
     } else {
       matchesCategory = true
     }
@@ -315,6 +380,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     setSelectedEmailId(null)
+    setCheckedEmailIds(new Set())
   }, [activeCategory, filterTab, searchQuery])
 
   const inboxCount = (statsData?.total || 0) - (statsData?.spam || 0)
@@ -613,45 +679,110 @@ export default function InboxPage() {
               <div className="flex items-center gap-1">
                 {/* Bulk checkbox */}
                 <div className="flex items-center" style={{ padding: "6px 8px" }}>
-                  <input type="checkbox" className="w-[18px] h-[18px] rounded cursor-pointer accent-[var(--accent-primary)]" onClick={(e) => e.stopPropagation()} />
+                  <input 
+                    type="checkbox" 
+                    checked={threadedEmails.length > 0 && checkedEmailIds.size === threadedEmails.length}
+                    ref={el => {
+                      if (el) {
+                        el.indeterminate = checkedEmailIds.size > 0 && checkedEmailIds.size < threadedEmails.length;
+                      }
+                    }}
+                    onChange={() => handleCheckAll(threadedEmails)}
+                    className="w-[18px] h-[18px] rounded cursor-pointer accent-[var(--accent-primary)]" 
+                    onClick={(e) => e.stopPropagation()} 
+                  />
                 </div>
 
-                {/* Refresh */}
-                <button
-                  onClick={() => refetch()}
-                  className="p-2 rounded-full hover:bg-gray-100 transition-colors"
-                  style={{ color: "var(--text-secondary)" }}
-                  title="Tải lại"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-
-                {/* Divider */}
-                <div style={{ width: 1, height: 20, background: "var(--border-color)", margin: "0 4px" }} />
-
-                {/* Filter tabs */}
-                <div className="flex">
-                  {['all', 'read', 'unread'].map(f => (
+                {checkedEmailIds.size > 0 ? (
+                  /* ── Bulk Actions Menu (shown when one or more emails are checked) ── */
+                  <div className="flex items-center gap-1">
                     <button
-                      key={f}
-                      onClick={() => setFilterTab(f)}
-                      className="transition-all duration-150"
-                      style={{
-                        padding: "6px 16px",
-                        fontSize: 13,
-                        fontWeight: filterTab === f ? 600 : 400,
-                        color: filterTab === f ? "var(--accent-primary)" : "var(--text-secondary)",
-                        borderBottom: filterTab === f ? "2px solid var(--accent-primary)" : "2px solid transparent",
-                        textTransform: "capitalize",
-                        background: "transparent",
-                      }}
-                      onMouseEnter={(e) => { if (filterTab !== f) (e.currentTarget as HTMLButtonElement).style.background = "#F5F5F5" }}
-                      onMouseLeave={(e) => { if (filterTab !== f) (e.currentTarget as HTMLButtonElement).style.background = "transparent" }}
+                      onClick={() => handleBulkAction('archive')}
+                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                      title="Lưu trữ"
                     >
-                      {f === 'all' ? 'Tất cả' : f === 'read' ? 'Đã đọc' : 'Chưa đọc'}
+                      <Archive className="w-[18px] h-[18px]" />
                     </button>
-                  ))}
-                </div>
+                    <button
+                      onClick={() => handleBulkAction('spam')}
+                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                      title="Báo cáo Spam"
+                    >
+                      <AlertOctagon className="w-[18px] h-[18px]" />
+                    </button>
+                    <button
+                      onClick={() => handleBulkAction('delete')}
+                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                      title="Xóa thư"
+                    >
+                      <Trash2 className="w-[18px] h-[18px]" />
+                    </button>
+                    
+                    <div style={{ width: 1, height: 20, background: "var(--border-color)", margin: "0 4px" }} />
+                    
+                    <button
+                      onClick={() => handleBulkAction('important')}
+                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                      title="Đánh dấu quan trọng"
+                    >
+                      <Star className="w-[18px] h-[18px]" />
+                    </button>
+                    <button
+                      onClick={() => handleBulkAction('unread')}
+                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                      title="Đánh dấu là chưa đọc"
+                    >
+                      <Mail className="w-[18px] h-[18px]" />
+                    </button>
+                    <button
+                      onClick={() => handleBulkAction('read')}
+                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                      title="Đánh dấu là đã đọc"
+                    >
+                      <MailOpen className="w-[18px] h-[18px]" />
+                    </button>
+                  </div>
+                ) : (
+                  /* ── Standard Toolbar Actions ── */
+                  <>
+                    {/* Refresh */}
+                    <button
+                      onClick={() => refetch()}
+                      className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                      style={{ color: "var(--text-secondary)" }}
+                      title="Tải lại"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+
+                    {/* Divider */}
+                    <div style={{ width: 1, height: 20, background: "var(--border-color)", margin: "0 4px" }} />
+
+                    {/* Filter tabs */}
+                    <div className="flex">
+                      {['all', 'read', 'unread'].map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setFilterTab(f)}
+                          className="transition-all duration-150"
+                          style={{
+                            padding: "6px 16px",
+                            fontSize: 13,
+                            fontWeight: filterTab === f ? 600 : 400,
+                            color: filterTab === f ? "var(--accent-primary)" : "var(--text-secondary)",
+                            borderBottom: filterTab === f ? "2px solid var(--accent-primary)" : "2px solid transparent",
+                            textTransform: "capitalize",
+                            background: "transparent",
+                          }}
+                          onMouseEnter={(e) => { if (filterTab !== f) (e.currentTarget as HTMLButtonElement).style.background = "#F5F5F5" }}
+                          onMouseLeave={(e) => { if (filterTab !== f) (e.currentTarget as HTMLButtonElement).style.background = "transparent" }}
+                        >
+                          {f === 'all' ? 'Tất cả' : f === 'read' ? 'Đã đọc' : 'Chưa đọc'}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Pagination info */}
@@ -737,6 +868,9 @@ export default function InboxPage() {
               isSelected={email.id === selectedEmailId}
               layoutMode={hasSplit ? "compact" : "horizontal"}
               onClick={() => setSelectedEmailId(email.id)}
+              isChecked={checkedEmailIds.has(email.id)}
+              onCheckToggle={() => handleCheckToggle(email.id)}
+              onStarToggle={() => handleStarToggle(email.id, email.label)}
             />
           ))}
 

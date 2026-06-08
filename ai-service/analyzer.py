@@ -26,6 +26,8 @@ class ActionItem(BaseModel):
 class EmailAnalysisItem(BaseModel):
     emailId: int = Field(description="ID của email được cung cấp trong đầu vào")
     label: str = Field(description="Phân loại nhãn của email: SPAM (quảng cáo bẩn, rác, lừa đảo), URGENT (cực kỳ khẩn cấp cần xử lý ngay), IMPORTANT (công việc quan trọng thường nhật), NORMAL (thông thường khác)")
+    confidence: float = Field(description="Độ tin cậy của kết quả phân loại nhãn (từ 0.0 đến 1.0)")
+    reason: str = Field(description="Lý do ngắn gọn giải thích tại sao gán nhãn này bằng tiếng Việt")
     summary: str = Field(description="Tóm tắt nội dung email tối đa 2 câu ngắn gọn bằng tiếng Việt. Nếu là SPAM thì ghi 'Email spam.'")
     action_items: List[ActionItem] = Field(description="Danh sách các việc cần làm trích xuất được từ email, hoặc mảng rỗng [] nếu không có hoặc là SPAM")
     suggested_replies: List[str] = Field(description="Gợi ý 3 câu trả lời ngắn gọn bằng tiếng Việt, hoặc mảng rỗng [] nếu là SPAM")
@@ -95,13 +97,74 @@ def analyze_emails_batch(emails: List[dict]) -> List[dict]:
     prompt = f"""Bạn là AI trợ lý phân tích email chuyên nghiệp. Hãy phân tích danh sách các email dưới đây.
 Với mỗi email, bạn cần thực hiện các tác vụ sau:
 1. Phân loại theo mức độ ưu tiên cá nhân (label): Chọn một trong: SPAM, URGENT, IMPORTANT, NORMAL.
-2. Tóm tắt nội dung (summary) tối đa 2 câu ngắn gọn bằng tiếng Việt. Nếu là SPAM thì ghi 'Email spam.'
-3. Trích xuất đầu việc cần làm (action_items): 
-   - Với mỗi công việc, xác định mô tả (task), độ ưu tiên (priority: HIGH, MEDIUM, LOW), và hạn hoàn thành (due_date) nếu được nhắc đến trong email hoặc lịch sử trò chuyện. Đối chiếu với ngày nhận thư (Received At) to tính toán hạn chót tương đối (ví dụ nếu nhận thư ngày '2026-06-08' là thứ Hai, và email ghi 'trước thứ Tư tuần này' thì do_date là '10/06/2026'). Nếu không có ngày cụ thể hoặc không rõ, trả về 'Không rõ'.
-4. Gợi ý 3 câu trả lời ngắn gọn (suggested_replies) bằng tiếng Việt. Nếu là SPAM, trả về mảng rỗng [].
-5. Xác định nên tạo task hay không (should_create_task): Đặt là True nếu email có chứa yêu cầu/công việc cần hành động rõ ràng từ người nhận. Email SPAM (quảng cáo, khuyến mãi, newsletter) hoặc email thông báo tự động (OTP, xác nhận giao dịch) thì luôn đặt là False.
-6. Tóm tắt tiêu đề task (task_title): Nếu should_create_task là True, hãy tạo một tiêu đề task cực kỳ ngắn gọn bằng tiếng Việt (tối đa 10 từ) tóm tắt công việc cần làm. Nếu False, trả về chuỗi rỗng "".
+2. Đánh giá độ tin cậy của kết quả phân loại (confidence): Chọn một giá trị số thực từ 0.0 đến 1.0. Nếu cực kỳ tự tin, hãy để giá trị cao (ví dụ: >= 0.9). Nếu phân vân, hãy để thấp (ví dụ: < 0.7).
+3. Đưa ra lý do ngắn gọn bằng tiếng Việt giải thích tại sao gán nhãn này (reason).
+4. Tóm tắt nội dung (summary) tối đa 2 câu ngắn gọn bằng tiếng Việt. Nếu là SPAM thì ghi 'Email spam.'
+5. Trích xuất đầu việc cần làm (action_items): 
+   - Với mỗi công việc, xác định mô tả (task), độ ưu tiên (priority: HIGH, MEDIUM, LOW), và hạn hoàn thành (due_date) nếu được nhắc đến trong email hoặc lịch sử trò chuyện. Đối chiếu với ngày nhận thư (Received At) để tính toán hạn chót tương đối (ví dụ nếu nhận thư ngày '2026-06-08' là thứ Hai, và email ghi 'trước thứ Tư tuần này' thì do_date là '10/06/2026'). Nếu không có ngày cụ thể hoặc không rõ, trả về 'Không rõ'.
+6. Gợi ý 3 câu trả lời ngắn gọn (suggested_replies) bằng tiếng Việt. Nếu là SPAM, trả về mảng rỗng [].
+7. Xác định nên tạo task hay không (should_create_task): Đặt là True nếu email có chứa yêu cầu/công việc cần hành động rõ ràng từ người nhận. Email SPAM (quảng cáo, khuyến mãi, newsletter) hoặc email thông báo tự động (OTP, xác nhận giao dịch) thì luôn đặt là False.
+8. Tóm tắt tiêu đề task (task_title): Nếu should_create_task là True, hãy tạo một tiêu đề task cực kỳ ngắn gọn bằng tiếng Việt (tối đa 10 từ) tóm tắt công việc cần làm. Nếu False, trả về chuỗi rỗng "".
 
+Hãy tham khảo các ví dụ mẫu (Few-shot examples) sau để phân loại chính xác:
+
+---
+VÍ DỤ 1 (Email SPAM - Quảng cáo/Khuyến mãi/Newsletter/Link Unsubscribe):
+Subject: "Khuyến mãi lớn 50% cho tất cả các khóa học lập trình AI"
+Body: "Nhận ưu đãi 50% khi đăng ký khóa học AI mới nhất ngay hôm nay. Vui lòng bấm vào liên kết để mua. Nếu không muốn nhận thư nữa, hãy nhấn unsubscribe tại đây."
+Kết quả mong muốn:
+- label: "SPAM"
+- confidence: 0.95
+- reason: "Email quảng cáo giới thiệu khóa học, chứa đường dẫn mua hàng và link hủy đăng ký (unsubscribe)."
+- summary: "Email spam."
+- action_items: []
+- suggested_replies: []
+- should_create_task: false
+- task_title: ""
+
+---
+VÍ DỤ 2 (Email URGENT - Vấn đề khẩn cấp cần giải quyết ngay lập tức):
+Subject: "[KHẨN] Máy chủ database gặp sự cố sập kết nối"
+Body: "Chào team, database server chính đang bị mất kết nối từ lúc 20:00 tối nay. Khách hàng không thể truy cập dữ liệu. Nhờ mọi người kiểm tra và khôi phục hệ thống gấp trong tối nay!"
+Kết quả mong muốn:
+- label: "URGENT"
+- confidence: 0.98
+- reason: "Sự cố hệ thống máy chủ sập ảnh hưởng trực tiếp diện rộng tới toàn bộ người dùng, yêu cầu xử lý khẩn cấp."
+- summary: "Máy chủ database chính bị sập kết nối lúc 20:00 tối nay làm khách hàng không truy cập được dữ liệu, yêu cầu kiểm tra và khôi phục gấp."
+- action_items: [{"task": "Kiểm tra và khôi phục máy chủ database bị sập kết nối", "due_date": "Tối nay", "priority": "HIGH"}]
+- suggested_replies: ["Tôi đang vào kiểm tra log hệ thống ngay lập tức.", "Đã nhận tin, đang tiến hành restart service database.", "Sẽ cập nhật tình hình sau 10 phút."]
+- should_create_task: true
+- task_title: "Khắc phục sự cố sập database"
+
+---
+VÍ DỤ 3 (Email IMPORTANT - Công việc quan trọng định kỳ, có deadline/hành động):
+Subject: "Yêu cầu gửi báo cáo doanh số tuần 23 và kế hoạch tuần 24"
+Body: "Chào các bạn, vui lòng chuẩn bị báo cáo doanh số chi tiết của tuần 23 và kế hoạch bán hàng tuần 24 gửi lại cho mình trước 17h thứ Sáu tuần này nhé. Cảm ơn cả nhà."
+Kết quả mong muốn:
+- label: "IMPORTANT"
+- confidence: 0.92
+- reason: "Yêu cầu báo cáo doanh số định kỳ và có thời hạn hoàn thành (deadline) cụ thể trong tuần."
+- summary: "Yêu cầu chuẩn bị báo cáo doanh số tuần 23 và kế hoạch tuần 24 gửi trước 17h thứ Sáu tuần này."
+- action_items: [{"task": "Chuẩn bị báo cáo doanh số tuần 23 và kế hoạch tuần 24 gửi sếp", "due_date": "Trước 17h thứ Sáu tuần này", "priority": "MEDIUM"}]
+- suggested_replies: ["Tôi đang hoàn thiện báo cáo và sẽ gửi đúng hạn.", "Đã nhận yêu cầu, tôi sẽ gửi báo cáo trước 17h thứ Sáu.", "Tôi sẽ gửi file báo cáo qua email này."]
+- should_create_task: true
+- task_title: "Gửi báo cáo doanh số tuần 23"
+
+---
+VÍ DỤ 4 (Email NORMAL - Email thông báo, trao đổi thông thường không khẩn cấp/quan trọng):
+Subject: "Xác nhận đặt bàn thành công tại nhà hàng Sen Tây Hồ"
+Body: "Kính gửi quý khách, yêu cầu đặt bàn 4 người vào lúc 19:00 ngày 10/06/2026 của quý khách tại nhà hàng Sen Tây Hồ đã được xác nhận thành công. Hẹn gặp lại quý khách."
+Kết quả mong muốn:
+- label: "NORMAL"
+- confidence: 0.90
+- reason: "Email xác nhận giao dịch tự động từ hệ thống nhà hàng, không đòi hỏi phản hồi hay hành động cụ thể nào."
+- summary: "Nhà hàng Sen Tây Hồ xác nhận đặt bàn thành công cho 4 người lúc 19:00 ngày 10/06/2026."
+- action_items: []
+- suggested_replies: ["Cảm ơn nhà hàng.", "Tôi đã nhận được thông tin xác nhận.", "Hẹn gặp lại quý nhà hàng."]
+- should_create_task: false
+- task_title: ""
+
+---
 Hãy sử dụng thông tin trong Conversation History (Lịch sử các thư cũ) nếu có để nắm bắt ngữ cảnh hội thoại đầy đủ khi phân tích thư mới nhất trong luồng đó.
 
 Danh sách email cần phân tích:

@@ -52,6 +52,7 @@ export const getNylasStatus  = () => api.get<{ connected: boolean }>('/emails/ny
 export const syncEmails      = () => api.post<{ status: string, message: string }>('/emails/sync')
 export const getThreadEmails = (threadId: string) => api.get<Email[]>(`/emails/thread/${threadId}`)
 export const updateReadStatus = (id: number | string, isRead: boolean) => api.patch<Email>(`/emails/${id}/read?isRead=${isRead}`)
+export const bulkUpdateEmails = (data: { emailIds: (number | string)[], label?: string, category?: string, isRead?: boolean }) => api.patch<void>('/emails/bulk', data)
 
 export type SendEmailPayload = {
     to: string
