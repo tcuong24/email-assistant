@@ -1,6 +1,7 @@
 package com.example.email_service.entity;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
@@ -78,6 +79,7 @@ public class Email {
     @Column(unique = true)
     private String messageId;
 
+    @JsonProperty("isRead")
     @Builder.Default
     private boolean isRead = false;
     

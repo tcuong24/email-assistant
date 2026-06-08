@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { getTasks, createTask, updateTaskStatus, deleteTask } from '../api/emailApi'
 import type { Task } from '../api/emailApi'
 import Sidebar from '../components/Sidebar'
+import { toast } from 'sonner'
 import {
   Calendar,
   CheckSquare,
@@ -112,7 +113,12 @@ export default function TasksPage() {
     e.preventDefault()
     const id = e.dataTransfer.getData('text/plain')
     if (id) {
-      updateStatusMutation.mutate({ id, status: targetStatus })
+      const promise = updateStatusMutation.mutateAsync({ id, status: targetStatus })
+      toast.promise(promise, {
+        loading: 'Đang di chuyển công việc...',
+        success: 'Đã cập nhật trạng thái công việc!',
+        error: 'Không thể di chuyển công việc.'
+      })
     }
   }
 
@@ -120,13 +126,18 @@ export default function TasksPage() {
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newTaskTitle.trim()) return
-    createTaskMutation.mutate({
+    const promise = createTaskMutation.mutateAsync({
       title: newTaskTitle,
       description: newTaskDesc,
       priority: newTaskPriority,
       dueDate: newTaskDueDate,
       category: newTaskCategory,
       status: 'TODO'
+    })
+    toast.promise(promise, {
+      loading: 'Đang tạo công việc mới...',
+      success: 'Đã tạo công việc thành công!',
+      error: 'Không thể tạo công việc.'
     })
   }
 
@@ -367,7 +378,12 @@ export default function TasksPage() {
                               <button
                                 onClick={() => {
                                   const nextStatus = task.status === 'DONE' ? 'TODO' : 'DONE'
-                                  updateStatusMutation.mutate({ id: task.id, status: nextStatus })
+                                  const promise = updateStatusMutation.mutateAsync({ id: task.id, status: nextStatus })
+                                  toast.promise(promise, {
+                                    loading: 'Đang cập nhật trạng thái...',
+                                    success: 'Đã cập nhật trạng thái công việc!',
+                                    error: 'Không thể cập nhật trạng thái.'
+                                  })
                                 }}
                                 className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
                                   isDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 hover:border-blue-500'
@@ -407,7 +423,14 @@ export default function TasksPage() {
                               <div className="flex items-center justify-end gap-2">
                                 {task.status !== 'DONE' && (
                                   <button
-                                    onClick={() => updateStatusMutation.mutate({ id: task.id, status: 'IN_PROGRESS' })}
+                                    onClick={() => {
+                                      const promise = updateStatusMutation.mutateAsync({ id: task.id, status: 'IN_PROGRESS' })
+                                      toast.promise(promise, {
+                                        loading: 'Đang bắt đầu công việc...',
+                                        success: 'Công việc đã chuyển sang Đang làm!',
+                                        error: 'Không thể cập nhật công việc.'
+                                      })
+                                    }}
                                     className="p-1.5 hover:bg-indigo-50 text-indigo-500 rounded-lg transition-colors cursor-pointer"
                                     title="Bắt đầu làm"
                                   >
@@ -415,7 +438,14 @@ export default function TasksPage() {
                                   </button>
                                 )}
                                 <button
-                                  onClick={() => deleteTaskMutation.mutate(task.id)}
+                                  onClick={() => {
+                                    const promise = deleteTaskMutation.mutateAsync(task.id)
+                                    toast.promise(promise, {
+                                      loading: 'Đang xóa công việc...',
+                                      success: 'Đã xóa công việc thành công!',
+                                      error: 'Không thể xóa công việc.'
+                                    })
+                                  }}
                                   className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg transition-colors cursor-pointer"
                                   title="Xóa công việc"
                                 >
@@ -575,7 +605,7 @@ export default function TasksPage() {
         layout
         draggable
         onDragStart={(e) => handleDragStart(e as any, task.id)}
-        className="bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-shadow select-none cursor-grab active:cursor-grabbing flex flex-col justify-between"
+        className="bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-shadow select-none cursor-grab active:cursor-grabbing flex flex-col justify-between group"
         style={{ borderColor: "var(--border)" }}
       >
         <div className="flex flex-col gap-2.5">
@@ -586,7 +616,14 @@ export default function TasksPage() {
             
             {/* Delete button */}
             <button 
-              onClick={() => deleteTaskMutation.mutate(task.id)}
+              onClick={() => {
+                const promise = deleteTaskMutation.mutateAsync(task.id)
+                toast.promise(promise, {
+                  loading: 'Đang xóa công việc...',
+                  success: 'Đã xóa công việc thành công!',
+                  error: 'Không thể xóa công việc.'
+                })
+              }}
               className="opacity-0 group-hover:opacity-100 hover:bg-red-50 p-1 rounded-lg text-red-500 transition-all cursor-pointer"
               style={{ padding: 4 }}
             >

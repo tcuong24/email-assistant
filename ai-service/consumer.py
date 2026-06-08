@@ -15,6 +15,18 @@ CONSUMER_GROUP  = "ai-service"
 # Hàng đợi chứa các email cần phân tích gom lô
 email_queue = queue.Queue()
 
+# ── Cấu hình từ khóa hành động để phân loại task ──
+ACTION_KEYWORDS = [
+    "please review", "can you", "deadline", "by tomorrow",
+    "cần bạn", "trước", "hạn", "họp", "meeting",
+    "submit", "gửi lại", "xác nhận", "confirm",
+    "fix", "check", "prepare", "chuẩn bị"
+]
+
+def has_action_item(subject: str, body: str) -> bool:
+    text = f"{subject or ''} {body or ''}".lower()
+    return any(kw in text for kw in ACTION_KEYWORDS)
+
 def batch_worker():
     """
     Luồng chạy ngầm gộp lô email, xử lý lọc trùng luồng và gọi Gemini hàng loạt
@@ -80,12 +92,28 @@ def batch_worker():
                     email_id = msg.get("emailId")
                     user_id = msg.get("userId")
                     received_at = msg.get("receivedAt")
+                    subject = msg.get("subject", "")
+                    body = msg.get("body", "")
                     
                     if email_id in results_by_id:
                         res = results_by_id[email_id]
-                        label = res.get("label", "NORMAL")
+                        label = res.get("label", "NORMAL").upper()
                         summary = res.get("summary", "Đã phân tích hoàn tất.")
                         suggested_replies = res.get("suggested_replies", [])
+                        
+                        # Logic phân tầng quyết định tạo task
+                        should_create = False
+                        task_title = res.get("task_title", "")
+                        
+                        if label == "SPAM":
+                            should_create = False
+                        elif label in ["IMPORTANT", "URGENT"]:
+                            should_create = res.get("should_create_task", False) or has_action_item(subject, body)
+                        else: # NORMAL
+                            should_create = res.get("should_create_task", False) and has_action_item(subject, body)
+                        
+                        if should_create and not task_title:
+                            task_title = subject if subject else "Nhiệm vụ từ email"
                         
                         # Định dạng danh sách ActionItem từ đối tượng sang chuỗi ghép tương thích ngược
                         action_items = []
@@ -98,7 +126,7 @@ def batch_worker():
                             else:
                                 action_items.append(str(item))
                                 
-                        publish_ai_result(email_id, label, summary, suggested_replies, action_items, user_id, received_at)
+                        publish_ai_result(email_id, label, summary, suggested_replies, action_items, user_id, received_at, should_create, task_title)
                     else:
                         # Fallback nếu AI bỏ sót emailId trong kết quả trả về của lô
                         print(f"[Worker] Cảnh báo: AI bỏ sót kết quả cho emailId {email_id}")
@@ -106,7 +134,7 @@ def batch_worker():
                             email_id, 
                             "NORMAL", 
                             "Lỗi: AI bỏ sót kết quả phân tích cho email này trong lượt xử lý hàng loạt.", 
-                            [], [], user_id, received_at
+                            [], [], user_id, received_at, False, None
                         )
             except Exception as e:
                 print(f"[Worker] Lỗi nghiêm trọng khi phân tích lô: {e}")
@@ -115,7 +143,7 @@ def batch_worker():
                     publish_ai_result(
                         msg.get("emailId"), "NORMAL", 
                         "Không thể phân tích do lỗi hệ thống AI.", 
-                        [], [], msg.get("userId"), msg.get("receivedAt")
+                        [], [], msg.get("userId"), msg.get("receivedAt"), False, None
                     )
             
             # Tránh Rate Limit của Gemini giữa các sub-batch
@@ -129,7 +157,7 @@ def batch_worker():
                 "Tự động bỏ qua phân tích (đã có thư mới hơn trong luồng hội thoại).", 
                 [], [], 
                 msg.get("userId"), 
-                msg.get("receivedAt")
+                msg.get("receivedAt"), False, None
             )
 
 

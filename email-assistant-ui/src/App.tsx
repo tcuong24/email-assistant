@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './store/authStore'
 import ProtectedRoute from './components/ProtectedRoute'
+import { Toaster } from 'sonner'
 
 import InboxPage from './pages/InboxPage'
 import EmailDetailPage from './pages/EmailDetailPage'
@@ -17,6 +18,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <Toaster richColors position="top-right" />
         <BrowserRouter>
           <Routes>
             <Route path="/login"    element={<LoginPage />} />

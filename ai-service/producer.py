@@ -43,7 +43,8 @@ AI_RESULT_TOPIC = os.getenv("KAFKA_TOPIC_AI_RESULT", "ai.result")
 
 def publish_ai_result(email_id: int, label: str,
                       summary: str, suggested_replies: list, action_items: list,
-                      user_id: int = None, received_at: str = None):
+                      user_id: int = None, received_at: str = None,
+                      should_create_task: bool = False, task_title: str = None):
     message = {
         "emailId": email_id,
         "label": label,
@@ -52,6 +53,8 @@ def publish_ai_result(email_id: int, label: str,
         "actionItems": action_items,
         "userId": user_id,
         "receivedAt": received_at,
+        "shouldCreateTask": should_create_task,
+        "taskTitle": task_title,
     }
     p = get_producer()
     p.send(AI_RESULT_TOPIC,

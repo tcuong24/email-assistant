@@ -2,6 +2,7 @@ package com.example.email_service.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,6 +26,7 @@ public class EmailEventDto {
         private String fromName;
         private String threadId;
         private String messageId;
+        @JsonProperty("isRead")
         private boolean isRead;
         private String category; // PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
     }
@@ -45,6 +47,7 @@ public class EmailEventDto {
         private boolean hasAttachments;
         private String fromName;
         private String threadId;
+        @JsonProperty("isRead")
         private boolean isRead;
         private String category; // PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
         private String threadContext;
@@ -62,6 +65,8 @@ public class EmailEventDto {
         private String summary;
         private List<String> suggestedReplies;
         private List<String> actionItems;
+        private Boolean shouldCreateTask;
+        private String taskTitle;
     }
 
     // Gửi notification cho UI (via WebSocket)

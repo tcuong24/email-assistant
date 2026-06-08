@@ -313,10 +313,24 @@ export default function InboxPage() {
   }, [threadEmails, selectedEmailId])
 
   const toggleEmailExpand = (emailId: string | number) => {
+    const nextState = !expandedEmailIds[emailId];
     setExpandedEmailIds(prev => ({
       ...prev,
-      [emailId]: !prev[emailId]
+      [emailId]: nextState
     }))
+    if (nextState) {
+      const emailItem = displayEmails.find(e => e.id === emailId);
+      if (emailItem && !emailItem.isRead) {
+        updateReadStatus(emailId, true)
+          .then(() => {
+            refetch();
+            refetchThread();
+          })
+          .catch(err => {
+            console.error("Failed to update read status for expanded email:", err);
+          });
+      }
+    }
   }
 
   const handleApplySuggestion = (suggestion: string) => {

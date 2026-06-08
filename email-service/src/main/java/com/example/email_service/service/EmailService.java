@@ -416,50 +416,57 @@ public class EmailService {
             log.info("Email {} cập nhật AI result: {}",
                     email.getId(), email.getLabel());
 
-            // Tách các ActionItem và lưu vào bảng tasks
-            if (event.getActionItems() != null) {
-                for (String rawItem : event.getActionItems()) {
-                    String priority = "LOW";
-                    String dueDate = "Không rõ";
-                    String title = rawItem;
+            // Tách các ActionItem và lưu vào bảng tasks nếu shouldCreateTask là true
+            if (Boolean.TRUE.equals(event.getShouldCreateTask())) {
+                String priority = "LOW";
+                String dueDate = "Không rõ";
+                String title = event.getTaskTitle();
+                if (title == null || title.strip().isEmpty()) {
+                    title = email.getSubject();
+                }
+                if (title == null || title.strip().isEmpty()) {
+                    title = "Nhiệm vụ từ email";
+                }
 
+                if (event.getActionItems() != null && !event.getActionItems().isEmpty()) {
+                    String firstRawItem = event.getActionItems().get(0);
                     try {
-                        if (rawItem.startsWith("[")) {
-                            int firstClose = rawItem.indexOf("]");
+                        if (firstRawItem.startsWith("[")) {
+                            int firstClose = firstRawItem.indexOf("]");
                             if (firstClose > 0) {
-                                priority = rawItem.substring(1, firstClose).trim();
-                                String rest = rawItem.substring(firstClose + 1).trim();
+                                priority = firstRawItem.substring(1, firstClose).trim();
+                                String rest = firstRawItem.substring(firstClose + 1).trim();
                                 if (rest.startsWith("[Hạn:")) {
                                     int secondClose = rest.indexOf("]");
                                     if (secondClose > 0) {
                                         dueDate = rest.substring(5, secondClose).trim();
-                                        title = rest.substring(secondClose + 1).trim();
                                     }
                                 }
                             }
                         }
                     } catch (Exception e) {
-                        log.warn("Lỗi phân tách action item '{}': {}", rawItem, e.getMessage());
+                        log.warn("Lỗi phân tách action item '{}': {}", firstRawItem, e.getMessage());
                     }
-
-                    Task.TaskPriority pEnum = Task.TaskPriority.LOW;
-                    try {
-                        pEnum = Task.TaskPriority.valueOf(priority.toUpperCase());
-                    } catch (Exception e) {
-                        // fallback
-                    }
-
-                    Task task = Task.builder()
-                            .userId(email.getUserId())
-                            .emailId(email.getId())
-                            .title(title)
-                            .priority(pEnum)
-                            .dueDate(dueDate)
-                            .status(Task.TaskStatus.TODO)
-                            .category(email.getCategory() != null ? email.getCategory().name() : "PRIMARY")
-                            .build();
-                    taskRepository.save(task);
                 }
+
+                Task.TaskPriority pEnum = Task.TaskPriority.LOW;
+                try {
+                    pEnum = Task.TaskPriority.valueOf(priority.toUpperCase());
+                } catch (Exception e) {
+                    // fallback
+                }
+
+                Task task = Task.builder()
+                        .userId(email.getUserId())
+                        .emailId(email.getId())
+                        .title(title)
+                        .priority(pEnum)
+                        .dueDate(dueDate)
+                        .status(Task.TaskStatus.TODO)
+                        .category(email.getCategory() != null ? email.getCategory().name() : "PRIMARY")
+                        .build();
+                taskRepository.save(task);
+                log.info("Đã tạo task cho emailId={}, tiêu đề={}, priority={}, dueDate={}", email.getId(), title, pEnum, dueDate);
             }
 
             // Push notification qua WebSocket

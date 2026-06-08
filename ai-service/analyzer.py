@@ -29,6 +29,8 @@ class EmailAnalysisItem(BaseModel):
     summary: str = Field(description="Tóm tắt nội dung email tối đa 2 câu ngắn gọn bằng tiếng Việt. Nếu là SPAM thì ghi 'Email spam.'")
     action_items: List[ActionItem] = Field(description="Danh sách các việc cần làm trích xuất được từ email, hoặc mảng rỗng [] nếu không có hoặc là SPAM")
     suggested_replies: List[str] = Field(description="Gợi ý 3 câu trả lời ngắn gọn bằng tiếng Việt, hoặc mảng rỗng [] nếu là SPAM")
+    should_create_task: bool = Field(description="True nếu email chứa công việc hoặc yêu cầu hành động rõ ràng và cần tạo task quản lý, ngược lại là False. Nếu là SPAM thì luôn ghi False")
+    task_title: Optional[str] = Field(description="Nếu should_create_task là True, hãy tóm tắt việc cần làm thành 1 câu tiêu đề ngắn gọn tiếng Việt (tối đa 10 từ). Ngược lại là chuỗi rỗng ''")
 
 # 3. Định nghĩa cấu trúc danh sách kết quả trả về của một Batch
 class BatchAnalysisResponse(BaseModel):
@@ -95,8 +97,10 @@ Với mỗi email, bạn cần thực hiện các tác vụ sau:
 1. Phân loại theo mức độ ưu tiên cá nhân (label): Chọn một trong: SPAM, URGENT, IMPORTANT, NORMAL.
 2. Tóm tắt nội dung (summary) tối đa 2 câu ngắn gọn bằng tiếng Việt. Nếu là SPAM thì ghi 'Email spam.'
 3. Trích xuất đầu việc cần làm (action_items): 
-   - Với mỗi công việc, xác định mô tả (task), độ ưu tiên (priority: HIGH, MEDIUM, LOW), và hạn hoàn thành (due_date) nếu được nhắc đến trong email hoặc lịch sử trò chuyện. Đối chiếu với ngày nhận thư (Received At) để tính toán hạn chót tương đối (ví dụ nếu nhận thư ngày '2026-06-08' là thứ Hai, và email ghi 'trước thứ Tư tuần này' thì do_date là '10/06/2026'). Nếu không có ngày cụ thể hoặc không rõ, trả về 'Không rõ'.
+   - Với mỗi công việc, xác định mô tả (task), độ ưu tiên (priority: HIGH, MEDIUM, LOW), và hạn hoàn thành (due_date) nếu được nhắc đến trong email hoặc lịch sử trò chuyện. Đối chiếu với ngày nhận thư (Received At) to tính toán hạn chót tương đối (ví dụ nếu nhận thư ngày '2026-06-08' là thứ Hai, và email ghi 'trước thứ Tư tuần này' thì do_date là '10/06/2026'). Nếu không có ngày cụ thể hoặc không rõ, trả về 'Không rõ'.
 4. Gợi ý 3 câu trả lời ngắn gọn (suggested_replies) bằng tiếng Việt. Nếu là SPAM, trả về mảng rỗng [].
+5. Xác định nên tạo task hay không (should_create_task): Đặt là True nếu email có chứa yêu cầu/công việc cần hành động rõ ràng từ người nhận. Email SPAM (quảng cáo, khuyến mãi, newsletter) hoặc email thông báo tự động (OTP, xác nhận giao dịch) thì luôn đặt là False.
+6. Tóm tắt tiêu đề task (task_title): Nếu should_create_task là True, hãy tạo một tiêu đề task cực kỳ ngắn gọn bằng tiếng Việt (tối đa 10 từ) tóm tắt công việc cần làm. Nếu False, trả về chuỗi rỗng "".
 
 Hãy sử dụng thông tin trong Conversation History (Lịch sử các thư cũ) nếu có để nắm bắt ngữ cảnh hội thoại đầy đủ khi phân tích thư mới nhất trong luồng đó.
 
