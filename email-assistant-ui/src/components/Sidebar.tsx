@@ -11,9 +11,10 @@ import {
   Trash2,
   Settings,
   FolderPlus,
-  Folder,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   LogOut,
   Link as LinkIcon,
   User,
@@ -41,6 +42,7 @@ export default function Sidebar({
   const [collapsed, setCollapsed] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [showMoreEmail, setShowMoreEmail] = useState(false)
   const { user, clearAuth } = useAuth()
   const navigate = useNavigate()
 
@@ -116,6 +118,12 @@ export default function Sidebar({
   const emailItems = [
     { id: "PRIMARY", label: "Hộp thư", icon: Inbox, badge: inboxCount },
     { id: "important", label: "Quan trọng", icon: Star },
+  ]
+
+  const moreEmailItems = [
+    { id: "sent", label: "Đã gửi", icon: Send },
+    { id: "drafts", label: "Thư nháp", icon: FileText },
+    { id: "deleted", label: "Đã xóa", icon: Trash2 },
   ]
 
   const taskItems = [
@@ -262,6 +270,38 @@ export default function Sidebar({
             </span>
           )}
           {emailItems.map(renderNavButton)}
+          
+          {showMoreEmail && moreEmailItems.map(renderNavButton)}
+          
+          <button
+            onClick={() => setShowMoreEmail(!showMoreEmail)}
+            className="flex items-center gap-3 rounded-lg transition-all duration-200 w-full text-left"
+            style={{
+              padding: collapsed ? "10px" : "8px 12px",
+              justifyContent: collapsed ? "center" : "flex-start",
+              color: "rgba(255,255,255,0.4)",
+              background: "transparent",
+              borderRadius: 8,
+              cursor: "pointer",
+              border: "none",
+              marginTop: 2,
+            }}
+            title={collapsed ? (showMoreEmail ? "Thu gọn" : "Xem thêm") : undefined}
+            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            {showMoreEmail ? (
+              <>
+                <ChevronUp className="w-[18px] h-[18px] text-gray-400 flex-shrink-0" />
+                {!collapsed && <span className="text-xs font-semibold">Thu gọn</span>}
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-[18px] h-[18px] text-gray-400 flex-shrink-0" />
+                {!collapsed && <span className="text-xs font-semibold">Xem thêm</span>}
+              </>
+            )}
+          </button>
         </div>
 
         {/* CÔNG VIỆC GROUP */}
