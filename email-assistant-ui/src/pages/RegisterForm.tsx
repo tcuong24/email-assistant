@@ -29,7 +29,7 @@ export default function RegisterPage() {
         password: form.password,
         fullName: form.fullName,
       })
-      
+
       saveAuth(data)
       navigate('/inbox')
     } catch (err: any) {
@@ -62,7 +62,7 @@ export default function RegisterPage() {
             className="text-3xl font-bold text-white tracking-tight"
             style={{ margin: 0 }}
           >
-            dappr
+            EmailFlow
           </h1>
           <p className="text-sm mt-2" style={{ color: "rgba(255,255,255,0.5)" }}>
             Email Assistant powered by AI
@@ -255,7 +255,7 @@ export default function RegisterPage() {
           className="text-center text-[11px] mt-6"
           style={{ color: "rgba(255,255,255,0.2)" }}
         >
-          © 2026 dappr. All rights reserved.
+          © 2026 EmailFlow. All rights reserved.
         </p>
       </div>
     </div>

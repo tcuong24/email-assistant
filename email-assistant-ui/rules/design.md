@@ -1,6 +1,6 @@
 # Email Client UI – Design Specification
 
-> Dựa trên giao diện ứng dụng **Dappr Email Client**
+> Dựa trên giao diện ứng dụng **EmailFlow Email Client**
 
 ---
 
@@ -52,7 +52,7 @@ Giao diện chia thành **3 cột chính** (Three-Panel Layout):
 ## 4. Sidebar (Cột trái)
 
 ### Cấu trúc
-- **Logo** (`dappr`) – top-left, màu trắng
+- **Logo** (`EmailFlow`) – top-left, màu trắng
 - **Collapse button** `‹` ở cạnh phải sidebar
 - **Navigation Icons** (icon-only hoặc icon + label):
   - Inbox *(active)*
@@ -142,7 +142,7 @@ Các action button nằm ngang:
 ### Email Header
 ```
 [Avatar]  Reid Smith                    Yesterday
-          My friend Julie loves Dappr!
+          My friend Julie loves EmailFlow!
 To: James Hendricks,  Cc: Jared Moore, Michela Nava, Eric Stromberg...
 ```
 

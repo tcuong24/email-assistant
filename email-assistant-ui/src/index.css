@@ -6,7 +6,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* ── Dappr Design Tokens ── */
+  /* ── EmailFlow Design Tokens ── */
   --bg-sidebar: #1A1A2E;
   --bg-main: #F7F8FA;
   --bg-panel: #FFFFFF;

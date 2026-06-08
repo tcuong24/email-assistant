@@ -77,7 +77,7 @@ export default function Sidebar({
   }
 
   const handleLogout = async () => {
-    try { await logout() } catch {}
+    try { await logout() } catch { }
     clearAuth()
     navigate("/login")
   }
@@ -221,7 +221,7 @@ export default function Sidebar({
               className="text-white font-bold tracking-tight"
               style={{ fontSize: 20 }}
             >
-              dappr
+              EmailFlow
             </span>
           )}
           <button
@@ -272,9 +272,9 @@ export default function Sidebar({
             </span>
           )}
           {emailItems.map(renderNavButton)}
-          
+
           {showMoreEmail && moreEmailItems.map(renderNavButton)}
-          
+
           <button
             onClick={() => setShowMoreEmail(!showMoreEmail)}
             className="flex items-center gap-3 rounded-lg transition-all duration-200 w-full text-left"
