@@ -732,7 +732,17 @@ public class EmailService {
             bodyMap.put("to", List.of(toMap));
 
             if (request.getReplyToMessageId() != null && !request.getReplyToMessageId().isEmpty()) {
-                bodyMap.put("reply_to_message_id", request.getReplyToMessageId());
+                String replyTo = request.getReplyToMessageId();
+                if (replyTo.matches("^\\d+$")) {
+                    Long dbId = Long.parseLong(replyTo);
+                    emailRepository.findById(dbId).ifPresent(email -> {
+                        if (email.getMessageId() != null && !email.getMessageId().isEmpty()) {
+                            bodyMap.put("reply_to_message_id", email.getMessageId());
+                        }
+                    });
+                } else {
+                    bodyMap.put("reply_to_message_id", replyTo);
+                }
             }
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(bodyMap, headers);

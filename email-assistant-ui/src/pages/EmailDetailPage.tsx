@@ -150,7 +150,7 @@ export default function EmailDetailPage() {
         to: email.fromAddress,
         subject: email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
         body: replyBody,
-        replyToMessageId: email.id.toString(),
+        replyToMessageId: email.messageId || email.id.toString(),
       })
       setReplyBody("")
       refetchThread()

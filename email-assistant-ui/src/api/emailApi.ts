@@ -24,6 +24,7 @@ export type Email = {
     category?: string
     hasAttachments?: boolean
     threadId?: string
+    messageId?: string
     isRead?: boolean
     status?: string
     attachments?: Attachment[]

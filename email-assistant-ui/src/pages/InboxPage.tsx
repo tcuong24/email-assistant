@@ -472,7 +472,7 @@ export default function InboxPage() {
         to: selectedEmail.fromAddress,
         subject: selectedEmail.subject.startsWith("Re:") ? selectedEmail.subject : `Re: ${selectedEmail.subject}`,
         body: replyBody,
-        replyToMessageId: selectedEmail.id.toString(),
+        replyToMessageId: selectedEmail.messageId || selectedEmail.id.toString(),
       })
       setReplyBody("")
       refetchThread()
