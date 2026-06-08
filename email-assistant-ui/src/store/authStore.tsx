@@ -3,8 +3,9 @@ import { createContext, useContext, useState, type ReactNode,  } from 'react'
 export type User = {
   id: number
   email: string
-  firstName: string
-  lastName: string
+  fullName?: string
+  firstName?: string
+  lastName?: string
 }
 
 type AuthContextType = {

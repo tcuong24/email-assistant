@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { getTasks, createTask, updateTaskStatus, deleteTask, Task } from '../api/emailApi'
+import { getTasks, createTask, updateTaskStatus, deleteTask } from '../api/emailApi'
+import type { Task } from '../api/emailApi'
 import Sidebar from '../components/Sidebar'
 import {
   Calendar,
@@ -573,7 +574,7 @@ export default function TasksPage() {
         key={task.id}
         layout
         draggable
-        onDragStart={(e) => handleDragStart(e, task.id)}
+        onDragStart={(e) => handleDragStart(e as any, task.id)}
         className="bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-shadow select-none cursor-grab active:cursor-grabbing flex flex-col justify-between"
         style={{ borderColor: "var(--border)" }}
       >

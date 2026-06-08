@@ -8,6 +8,7 @@ import EmailDetailPage from './pages/EmailDetailPage'
 import DashboardPage from './pages/DashboardPage'
 import TasksPage from './pages/TasksPage'
 import LoginPage from './pages/LoginForm'
+import RegisterPage from './pages/RegisterForm'
 import OAuthCallback from './components/OAuthNylas'
 
 const queryClient = new QueryClient()
@@ -19,7 +20,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login"    element={<LoginPage />} />
-            {/* <Route path="/register" element={<RegisterPage />} /> */}
+            <Route path="/register" element={<RegisterPage />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/inbox" element={
               <ProtectedRoute><InboxPage /></ProtectedRoute>

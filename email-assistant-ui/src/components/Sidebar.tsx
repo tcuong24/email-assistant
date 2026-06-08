@@ -370,7 +370,7 @@ export default function Sidebar({
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-white truncate leading-tight">
-                  {user.firstName} {user.lastName}
+                  {user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User'}
                 </p>
                 <p className="text-[11px] text-gray-400 truncate leading-tight">
                   {user.email}
