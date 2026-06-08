@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getEmail, analyzeEmail, getThreadEmails, sendEmail } from '../api/emailApi'
+import { getEmail, analyzeEmail, getThreadEmails, sendEmail, createTask } from '../api/emailApi'
+import type { Email } from '../api/emailApi'
 import Sidebar from '../components/Sidebar'
 import LabelBadge from '../components/LabelBadge'
 import ComposeModal from '../components/ComposeModal'
@@ -13,7 +14,10 @@ import {
   ArrowLeft,
   Paperclip,
   Send,
+  Plus,
+  Check,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { stripHtml } from '@/lib/utils'
 import EmailBodyRenderer from '../components/EmailBodyRenderer'
 
@@ -39,6 +43,61 @@ export default function EmailDetailPage() {
   const [isComposeOpen, setIsComposeOpen] = useState(false)
   const [replyBody, setReplyBody] = useState("")
   const [isSendingReply, setIsSendingReply] = useState(false)
+
+  const [createdTaskKeys, setCreatedTaskKeys] = useState<string[]>([])
+
+  const parseActionItem = (rawItem: string) => {
+    let priority: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW'
+    let dueDate = 'Không rõ'
+    let title = rawItem
+
+    try {
+      if (rawItem.startsWith("[")) {
+        const firstClose = rawItem.indexOf("]")
+        if (firstClose > 0) {
+          const priorityStr = rawItem.substring(1, firstClose).trim().toUpperCase()
+          if (priorityStr === 'HIGH' || priorityStr === 'MEDIUM' || priorityStr === 'LOW') {
+            priority = priorityStr
+          }
+          const rest = rawItem.substring(firstClose + 1).trim()
+          if (rest.startsWith("[Hạn:")) {
+            const secondClose = rest.indexOf("]")
+            if (secondClose > 0) {
+              dueDate = rest.substring(5, secondClose).trim()
+              title = rest.substring(secondClose + 1).trim()
+            }
+          } else {
+            title = rest
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to parse action item", e)
+    }
+
+    return { priority, dueDate, title }
+  }
+
+  const handleCreateTaskFromAi = (rawItem: string, emailItem: Email, itemKey: string) => {
+    const parsed = parseActionItem(rawItem)
+    const promise = createTask({
+      title: parsed.title,
+      priority: parsed.priority,
+      dueDate: parsed.dueDate,
+      category: emailItem.category || 'PRIMARY',
+      emailId: emailItem.id,
+      status: 'TODO'
+    })
+
+    toast.promise(promise, {
+      loading: 'Đang tạo công việc...',
+      success: () => {
+        setCreatedTaskKeys(prev => [...prev, itemKey])
+        return 'Đã thêm công việc vào Kanban board!'
+      },
+      error: 'Không thể tạo công việc.'
+    })
+  }
 
   // Lấy tất cả email trong cùng luồng
   const { data: threadEmails, isLoading: isThreadLoading, refetch: refetchThread } = useQuery({
@@ -341,11 +400,29 @@ export default function EmailDetailPage() {
                             className="rounded-xl mb-4"
                             style={{ padding: "12px 16px", background: "linear-gradient(135deg, #ECFDF5, #F0FDF4)", border: "1px solid #A7F3D0" }}
                           >
-                            <p className="text-[11px] font-semibold mb-1" style={{ color: "#059669" }}>✅ Việc cần làm (AI trích xuất)</p>
-                            <ul className="text-xs leading-relaxed m-0 list-disc pl-4" style={{ color: "#065F46" }}>
-                              {emailItem.actionItems.split("||").map((item, idx) => (
-                                <li key={idx} style={{ color: "#065F46" }}>{item.trim()}</li>
-                              ))}
+                            <p className="text-[11px] font-semibold mb-2" style={{ color: "#059669" }}>✅ Việc cần làm (AI gợi ý tạo Task)</p>
+                            <ul className="text-xs leading-relaxed m-0 list-none pl-0 flex flex-col gap-2" style={{ color: "#065F46" }}>
+                              {emailItem.actionItems.split("||").map((item, idx) => {
+                                const itemKey = `${emailItem.id}-${idx}`;
+                                const isAdded = createdTaskKeys.includes(itemKey);
+                                return (
+                                  <li key={idx} className="flex items-center justify-between gap-3 py-1.5 border-b border-emerald-100/50 last:border-none">
+                                    <span style={{ color: "#065F46" }}>{item.trim()}</span>
+                                    {isAdded ? (
+                                      <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 bg-emerald-100/50 px-2 py-0.5 rounded-full flex-shrink-0">
+                                        <Check className="w-3 h-3 stroke-[3]" /> Đã thêm
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleCreateTaskFromAi(item, emailItem, itemKey)}
+                                        className="text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer flex-shrink-0"
+                                      >
+                                        <Plus className="w-3 h-3 stroke-[3]" /> Tạo Task
+                                      </button>
+                                    )}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         )}

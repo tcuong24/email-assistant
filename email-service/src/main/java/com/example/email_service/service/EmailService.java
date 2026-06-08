@@ -416,58 +416,8 @@ public class EmailService {
             log.info("Email {} cập nhật AI result: {}",
                     email.getId(), email.getLabel());
 
-            // Tách các ActionItem và lưu vào bảng tasks nếu shouldCreateTask là true
-            if (Boolean.TRUE.equals(event.getShouldCreateTask())) {
-                String priority = "LOW";
-                String dueDate = "Không rõ";
-                String title = event.getTaskTitle();
-                if (title == null || title.strip().isEmpty()) {
-                    title = email.getSubject();
-                }
-                if (title == null || title.strip().isEmpty()) {
-                    title = "Nhiệm vụ từ email";
-                }
-
-                if (event.getActionItems() != null && !event.getActionItems().isEmpty()) {
-                    String firstRawItem = event.getActionItems().get(0);
-                    try {
-                        if (firstRawItem.startsWith("[")) {
-                            int firstClose = firstRawItem.indexOf("]");
-                            if (firstClose > 0) {
-                                priority = firstRawItem.substring(1, firstClose).trim();
-                                String rest = firstRawItem.substring(firstClose + 1).trim();
-                                if (rest.startsWith("[Hạn:")) {
-                                    int secondClose = rest.indexOf("]");
-                                    if (secondClose > 0) {
-                                        dueDate = rest.substring(5, secondClose).trim();
-                                    }
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.warn("Lỗi phân tách action item '{}': {}", firstRawItem, e.getMessage());
-                    }
-                }
-
-                Task.TaskPriority pEnum = Task.TaskPriority.LOW;
-                try {
-                    pEnum = Task.TaskPriority.valueOf(priority.toUpperCase());
-                } catch (Exception e) {
-                    // fallback
-                }
-
-                Task task = Task.builder()
-                        .userId(email.getUserId())
-                        .emailId(email.getId())
-                        .title(title)
-                        .priority(pEnum)
-                        .dueDate(dueDate)
-                        .status(Task.TaskStatus.TODO)
-                        .category(email.getCategory() != null ? email.getCategory().name() : "PRIMARY")
-                        .build();
-                taskRepository.save(task);
-                log.info("Đã tạo task cho emailId={}, tiêu đề={}, priority={}, dueDate={}", email.getId(), title, pEnum, dueDate);
-            }
+            // Tách các ActionItem và lưu vào bảng tasks nếu shouldCreateTask là true - ĐÃ BỎ THEO YÊU CẦU ĐỂ TẠO THỦ CÔNG TỪ UI
+            log.info("Bỏ qua tự động tạo task cho emailId={} để người dùng tự bấm tạo trên giao diện.", email.getId());
 
             // Push notification qua WebSocket
             try {
