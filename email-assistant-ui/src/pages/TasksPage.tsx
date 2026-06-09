@@ -19,8 +19,26 @@ import {
   X,
   Play,
   Check,
-  RotateCcw
+  RotateCcw,
+  ChevronDown
 } from 'lucide-react'
+
+const getTodayDateString = () => {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+const formatDateToDdMmYyyy = (dateStr: string) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
 
 export default function TasksPage() {
   const [searchParams] = useSearchParams()
@@ -34,8 +52,12 @@ export default function TasksPage() {
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskDesc, setNewTaskDesc] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('LOW')
-  const [newTaskDueDate, setNewTaskDueDate] = useState('Hôm nay')
+  const [newTaskDueDate, setNewTaskDueDate] = useState(getTodayDateString())
   const [newTaskCategory, setNewTaskCategory] = useState('Dev')
+
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [filterPriority, setFilterPriority] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL')
+  const [filterCategory, setFilterCategory] = useState<string>('ALL')
 
   // 1. Fetch danh sách task từ backend
   const { data: tasks = [], isLoading, refetch } = useQuery({
@@ -62,7 +84,7 @@ export default function TasksPage() {
       setNewTaskTitle('')
       setNewTaskDesc('')
       setNewTaskPriority('LOW')
-      setNewTaskDueDate('Hôm nay')
+      setNewTaskDueDate(getTodayDateString())
       setNewTaskCategory('Dev')
     }
   })
@@ -130,7 +152,7 @@ export default function TasksPage() {
       title: newTaskTitle,
       description: newTaskDesc,
       priority: newTaskPriority,
-      dueDate: newTaskDueDate,
+      dueDate: formatDateToDdMmYyyy(newTaskDueDate),
       category: newTaskCategory,
       status: 'TODO'
     })
@@ -141,14 +163,25 @@ export default function TasksPage() {
     })
   }
 
-  // Lọc danh sách theo view hiện tại
+  // Lọc danh sách theo view hiện tại và các bộ lọc được chọn
   const filteredTasks = tasks.filter(t => {
     if (view === 'today') {
       const due = t.dueDate?.toLowerCase() || ''
-      return due.includes('hôm nay')
+      if (!due.includes('hôm nay')) return false
     }
+    
+    if (filterPriority !== 'ALL' && t.priority !== filterPriority) {
+      return false
+    }
+    
+    if (filterCategory !== 'ALL' && t.category !== filterCategory) {
+      return false
+    }
+    
     return true
   })
+
+  const activeFiltersCount = (filterPriority !== 'ALL' ? 1 : 0) + (filterCategory !== 'ALL' ? 1 : 0)
 
   // Định nghĩa màu sắc cho thẻ Category
   const getCategoryColor = (cat: string) => {
@@ -183,13 +216,121 @@ export default function TasksPage() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            <button 
-              className="flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-semibold bg-white hover:bg-gray-50 transition-colors"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <Filter className="w-4 h-4 text-gray-500" />
-              <span>Lọc</span>
-            </button>
+            <div className="relative">
+              <div className="flex items-center gap-1.5">
+                <button 
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                    activeFiltersCount > 0
+                      ? 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100/70'
+                      : 'bg-white border-gray-200 hover:bg-gray-50'
+                  }`}
+                  style={{ borderColor: activeFiltersCount > 0 ? undefined : "var(--border)" }}
+                >
+                  <Filter className="w-4 h-4 text-current" />
+                  <span>Lọc {activeFiltersCount > 0 ? `(${activeFiltersCount})` : ''}</span>
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                </button>
+                
+                {activeFiltersCount > 0 && (
+                  <button
+                    onClick={() => {
+                      setFilterPriority('ALL');
+                      setFilterCategory('ALL');
+                    }}
+                    className="p-2 border border-red-200 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors cursor-pointer"
+                    title="Xóa bộ lọc"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <AnimatePresence>
+                {isFilterOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsFilterOpen(false)} />
+                    <motion.div 
+                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-80 bg-white border rounded-2xl shadow-xl z-40 p-5 flex flex-col gap-4 text-left"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-800 mb-2.5">Độ ưu tiên</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { value: 'ALL', label: 'Tất cả' },
+                            { value: 'HIGH', label: 'Khẩn', bg: 'bg-red-50 border-red-200 text-red-600' },
+                            { value: 'MEDIUM', label: 'Trung bình', bg: 'bg-amber-50 border-amber-200 text-amber-600' },
+                            { value: 'LOW', label: 'Thấp', bg: 'bg-green-50 border-green-200 text-green-600' }
+                          ].map(p => (
+                            <button
+                              key={p.value}
+                              type="button"
+                              onClick={() => setFilterPriority(p.value as any)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                                filterPriority === p.value
+                                  ? p.value === 'ALL'
+                                    ? 'bg-gray-900 border-gray-900 text-white'
+                                    : p.bg
+                                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="border-t pt-3" style={{ borderColor: "var(--border)" }}>
+                        <h3 className="text-sm font-bold text-gray-800 mb-2.5">Danh mục</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: 'ALL', label: 'Tất cả' },
+                            { value: 'Dev', label: 'Dev / Kỹ thuật' },
+                            { value: 'Design', label: 'Design / Thiết kế' },
+                            { value: 'Bug', label: 'Bug / Sửa lỗi' },
+                            { value: 'Sales', label: 'Sales / Hợp đồng' },
+                            { value: 'HR', label: 'HR / Tuyển dụng' },
+                            { value: 'Hỗ trợ', label: 'Hỗ trợ khách hàng' }
+                          ].map(c => (
+                            <button
+                              key={c.value}
+                              type="button"
+                              onClick={() => setFilterCategory(c.value)}
+                              className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer text-left truncate ${
+                                filterCategory === c.value
+                                  ? 'bg-blue-50 border-blue-500 text-blue-600'
+                                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {activeFiltersCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFilterPriority('ALL');
+                            setFilterCategory('ALL');
+                            setIsFilterOpen(false);
+                          }}
+                          className="w-full mt-2 py-2 text-center text-xs font-bold text-red-500 hover:text-red-700 bg-red-50/50 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          Xóa bộ lọc
+                        </button>
+                      )}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
             <button
               onClick={() => setIsCreateOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all cursor-pointer hover:scale-105 active:scale-95"
@@ -523,7 +664,7 @@ export default function TasksPage() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Hạn chót</label>
                   <input 
-                    type="text" 
+                    type="date" 
                     value={newTaskDueDate}
                     onChange={(e) => setNewTaskDueDate(e.target.value)}
                     className="w-full px-4 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
