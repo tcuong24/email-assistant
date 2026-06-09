@@ -252,21 +252,29 @@ public class EmailController {
                             if (data == null) {
                                 data = responseBody;
                             }
-                            if (data != null && data.containsKey("scopes")) {
-                                java.util.List<?> scopes = (java.util.List<?>) data.get("scopes");
-                                log.info("Nylas Grant scopes returned: {}", scopes);
-                                boolean hasRead = false;
-                                boolean hasSend = false;
-                                for (Object s : scopes) {
-                                    String scopeStr = String.valueOf(s).toLowerCase();
-                                    if (scopeStr.contains("gmail.readonly") || scopeStr.contains("email.read_only") || scopeStr.contains("gmail.modify") || scopeStr.contains("email.modify")) {
-                                        hasRead = true;
-                                    }
-                                    if (scopeStr.contains("gmail.send") || scopeStr.contains("email.send") || scopeStr.contains("gmail.modify") || scopeStr.contains("email.modify")) {
-                                        hasSend = true;
-                                    }
+                            if (data != null) {
+                                java.util.List<?> scopes = null;
+                                if (data.containsKey("scope")) {
+                                    scopes = (java.util.List<?>) data.get("scope");
+                                } else if (data.containsKey("scopes")) {
+                                    scopes = (java.util.List<?>) data.get("scopes");
                                 }
-                                hasEnoughScopes = hasRead && hasSend;
+                                
+                                if (scopes != null) {
+                                    log.info("Nylas Grant scopes returned: {}", scopes);
+                                    boolean hasRead = false;
+                                    boolean hasSend = false;
+                                    for (Object s : scopes) {
+                                        String scopeStr = String.valueOf(s).toLowerCase();
+                                        if (scopeStr.contains("gmail.readonly") || scopeStr.contains("email.read_only") || scopeStr.contains("gmail.modify") || scopeStr.contains("email.modify")) {
+                                            hasRead = true;
+                                        }
+                                        if (scopeStr.contains("gmail.send") || scopeStr.contains("email.send") || scopeStr.contains("gmail.modify") || scopeStr.contains("email.modify")) {
+                                            hasSend = true;
+                                        }
+                                    }
+                                    hasEnoughScopes = hasRead && hasSend;
+                                }
                             }
                         }
                     } catch (Exception ex) {
