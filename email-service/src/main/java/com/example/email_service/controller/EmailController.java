@@ -234,7 +234,7 @@ public class EmailController {
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
                 String grantId = (String) response.getBody().get("grant_id");
                 if (grantId != null) {
-`                    // Kiểm tra xem user có cấp đủ quyền đọc/gửi thư không
+                    // Kiểm tra xem user có cấp đủ quyền đọc/gửi thư không
                     boolean hasEnoughScopes = false;
                     try {
                         org.springframework.http.HttpHeaders getHeaders = new org.springframework.http.HttpHeaders();
