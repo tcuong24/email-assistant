@@ -245,8 +245,13 @@ public class EmailController {
                                 org.springframework.http.HttpMethod.GET,
                                 getEntity,
                                 java.util.Map.class);
+                        log.info("Nylas grant response: status={}, body={}", grantResponse.getStatusCode(), grantResponse.getBody());
                         if (grantResponse.getStatusCode() == org.springframework.http.HttpStatus.OK && grantResponse.getBody() != null) {
-                            java.util.Map data = (java.util.Map) grantResponse.getBody().get("data");
+                            java.util.Map responseBody = grantResponse.getBody();
+                            java.util.Map data = (java.util.Map) responseBody.get("data");
+                            if (data == null) {
+                                data = responseBody;
+                            }
                             if (data != null && data.containsKey("scopes")) {
                                 java.util.List<?> scopes = (java.util.List<?>) data.get("scopes");
                                 log.info("Nylas Grant scopes returned: {}", scopes);
