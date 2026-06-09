@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 
 @SpringBootApplication
 @EnableAsync
+@org.springframework.scheduling.annotation.EnableScheduling
 public class EmailServiceApplication {
 
 	public static void main(String[] args) {

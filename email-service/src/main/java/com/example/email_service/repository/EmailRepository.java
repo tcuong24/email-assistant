@@ -26,4 +26,8 @@ public interface EmailRepository extends JpaRepository<Email, Long> {
     Page<Email> findByUserIdAndCategoryOrderByReceivedAtDesc(Long userId, Email.EmailCategory category, Pageable pageable);
     List<Email> findByUserIdAndCategoryOrderByReceivedAtDesc(Long userId, Email.EmailCategory category);
     List<Email> findByThreadIdAndUserIdOrderByReceivedAtAsc(String threadId, Long userId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM Email e WHERE e.category = com.example.email_service.entity.Email$EmailCategory.DELETED AND e.updatedAt < :dateTime")
+    int deleteOldTrashEmails(java.time.LocalDateTime dateTime);
 }

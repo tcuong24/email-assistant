@@ -125,7 +125,7 @@ export default function Sidebar({
     { id: "sent", label: "Đã gửi", icon: Send },
     { id: "drafts", label: "Thư nháp", icon: FileText },
     { id: "spam", label: "Thư rác", icon: AlertCircle },
-    { id: "deleted", label: "Đã xóa", icon: Trash2 },
+    { id: "deleted", label: "Thùng rác", icon: Trash2 },
   ]
 
   const taskItems = [

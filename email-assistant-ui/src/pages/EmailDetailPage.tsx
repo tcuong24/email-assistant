@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getEmail, analyzeEmail, getThreadEmails, sendEmail, createTask } from '../api/emailApi'
+import { getEmail, analyzeEmail, getThreadEmails, sendEmail, createTask, bulkUpdateEmails, bulkDeleteEmails } from '../api/emailApi'
 import type { Email } from '../api/emailApi'
 import Sidebar from '../components/Sidebar'
 import LabelBadge from '../components/LabelBadge'
@@ -16,6 +16,7 @@ import {
   Send,
   Plus,
   Check,
+  RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { stripHtml } from '@/lib/utils'
@@ -132,6 +133,33 @@ export default function EmailDetailPage() {
       ...prev,
       [emailId]: !prev[emailId]
     }))
+  }
+
+  const handleSingleAction = async (action: 'spam' | 'important' | 'delete' | 'archive' | 'read' | 'unread' | 'restore' | 'permanent_delete') => {
+    if (!email) return
+    const emailIds = [email.id]
+    const promise = (async () => {
+      if (action === 'spam') {
+        await bulkUpdateEmails({ emailIds, label: 'SPAM', category: 'SPAM' })
+      } else if (action === 'important') {
+        await bulkUpdateEmails({ emailIds, label: 'IMPORTANT' })
+      } else if (action === 'delete') {
+        await bulkUpdateEmails({ emailIds, category: 'DELETED' })
+      } else if (action === 'archive') {
+        await bulkUpdateEmails({ emailIds, label: 'NORMAL' })
+      } else if (action === 'restore') {
+        await bulkUpdateEmails({ emailIds, category: 'PRIMARY', label: 'NORMAL' })
+      } else if (action === 'permanent_delete') {
+        await bulkDeleteEmails(emailIds)
+      }
+      navigate(-1)
+    })()
+
+    toast.promise(promise, {
+      loading: action === 'permanent_delete' ? 'Đang xóa vĩnh viễn...' : 'Đang cập nhật...',
+      success: action === 'permanent_delete' ? 'Đã xóa vĩnh viễn thành công!' : 'Đã cập nhật thành công!',
+      error: 'Thực hiện thất bại.'
+    })
   }
 
   const handleApplySuggestion = (suggestion: string) => {
@@ -254,20 +282,49 @@ export default function EmailDetailPage() {
 
             <div className="mx-1" style={{ width: 1, height: 16, background: "var(--border-color)" }} />
 
-            <button
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 hover:text-red-600"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Delete</span>
-            </button>
-            <button
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-amber-50 hover:text-amber-600"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              <Star className="w-3.5 h-3.5" />
-              <span>Important</span>
-            </button>
+            {email?.category === "DELETED" ? (
+              <>
+                <button
+                  onClick={() => handleSingleAction('restore')}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-indigo-50 hover:text-indigo-600 cursor-pointer"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Khôi phục</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm("Bạn có chắc chắn muốn xóa vĩnh viễn thư này? Hành động này không thể hoàn tác.")) {
+                      handleSingleAction('permanent_delete')
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                  <span>Xóa vĩnh viễn</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleSingleAction('delete')}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+                <button
+                  onClick={() => handleSingleAction('important')}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-amber-50 hover:text-amber-600 cursor-pointer"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  <Star className="w-3.5 h-3.5" />
+                  <span>Important</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 

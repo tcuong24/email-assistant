@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { getEmails, getSentEmails, getDraftEmails, getEmailStats, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails, updateReadStatus, createTask, bulkUpdateEmails } from '../api/emailApi'
+import { getEmails, getSentEmails, getDraftEmails, getEmailStats, analyzeEmail, getThreadEmails, sendEmail, getNylasStatus, syncEmails, updateReadStatus, createTask, bulkUpdateEmails, bulkDeleteEmails } from '../api/emailApi'
 import LabelBadge from '../components/LabelBadge'
 import Sidebar from '../components/Sidebar'
 import ComposeModal from '../components/ComposeModal'
@@ -35,6 +35,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreVertical,
+  RotateCcw,
 } from 'lucide-react'
 
 const CATEGORY_TABS = [
@@ -91,7 +92,7 @@ export default function InboxPage() {
     }
   }
 
-  const handleBulkAction = async (action: 'spam' | 'important' | 'delete' | 'archive' | 'read' | 'unread') => {
+  const handleBulkAction = async (action: 'spam' | 'important' | 'delete' | 'archive' | 'read' | 'unread' | 'restore' | 'permanent_delete') => {
     if (checkedEmailIds.size === 0) return
 
     const emailIds = Array.from(checkedEmailIds)
@@ -108,15 +109,50 @@ export default function InboxPage() {
         await bulkUpdateEmails({ emailIds, isRead: true })
       } else if (action === 'unread') {
         await bulkUpdateEmails({ emailIds, isRead: false })
+      } else if (action === 'restore') {
+        await bulkUpdateEmails({ emailIds, category: 'PRIMARY', label: 'NORMAL' })
+      } else if (action === 'permanent_delete') {
+        await bulkDeleteEmails(emailIds)
       }
       setCheckedEmailIds(new Set())
       refetch()
     })()
 
     toast.promise(promise, {
-      loading: 'Đang cập nhật các thư đã chọn...',
-      success: 'Đã cập nhật thành công!',
-      error: 'Cập nhật thất bại.'
+      loading: action === 'permanent_delete' ? 'Đang xóa vĩnh viễn các thư đã chọn...' : 'Đang cập nhật các thư đã chọn...',
+      success: action === 'permanent_delete' ? 'Đã xóa vĩnh viễn thành công!' : 'Đã cập nhật thành công!',
+      error: action === 'permanent_delete' ? 'Xóa vĩnh viễn thất bại.' : 'Cập nhật thất bại.'
+    })
+  }
+
+  const handleSingleAction = async (emailId: string | number, action: 'spam' | 'important' | 'delete' | 'archive' | 'read' | 'unread' | 'restore' | 'permanent_delete') => {
+    const emailIds = [emailId]
+    const promise = (async () => {
+      if (action === 'spam') {
+        await bulkUpdateEmails({ emailIds, label: 'SPAM', category: 'SPAM' })
+      } else if (action === 'important') {
+        await bulkUpdateEmails({ emailIds, label: 'IMPORTANT' })
+      } else if (action === 'delete') {
+        await bulkUpdateEmails({ emailIds, category: 'DELETED' })
+      } else if (action === 'archive') {
+        await bulkUpdateEmails({ emailIds, label: 'NORMAL' })
+      } else if (action === 'read') {
+        await bulkUpdateEmails({ emailIds, isRead: true })
+      } else if (action === 'unread') {
+        await bulkUpdateEmails({ emailIds, isRead: false })
+      } else if (action === 'restore') {
+        await bulkUpdateEmails({ emailIds, category: 'PRIMARY', label: 'NORMAL' })
+      } else if (action === 'permanent_delete') {
+        await bulkDeleteEmails(emailIds)
+      }
+      setSelectedEmailId(null)
+      refetch()
+    })()
+
+    toast.promise(promise, {
+      loading: action === 'permanent_delete' ? 'Đang xóa vĩnh viễn...' : 'Đang cập nhật...',
+      success: action === 'permanent_delete' ? 'Đã xóa vĩnh viễn thành công!' : 'Đã cập nhật thành công!',
+      error: 'Thực hiện thất bại.'
     })
   }
 
@@ -226,9 +262,18 @@ export default function InboxPage() {
         return getDraftEmails(currentPage, 50).then(r => r.data)
       }
       if (activeCategory === "inbox") {
-        return getEmails(activeTab, currentPage, 50).then(r => r.data)
+        return getEmails(activeTab, undefined, currentPage, 50).then(r => r.data)
       }
-      return getEmails(undefined, currentPage, 50).then(r => r.data)
+      if (activeCategory === "spam") {
+        return getEmails("SPAM", undefined, currentPage, 50).then(r => r.data)
+      }
+      if (activeCategory === "deleted") {
+        return getEmails("DELETED", undefined, currentPage, 50).then(r => r.data)
+      }
+      if (activeCategory === "important") {
+        return getEmails(undefined, "IMPORTANT", currentPage, 50).then(r => r.data)
+      }
+      return getEmails(undefined, undefined, currentPage, 50).then(r => r.data)
     },
     refetchInterval: refetchIntervalState,
   })
@@ -391,7 +436,7 @@ export default function InboxPage() {
       case 'important': return 'Important'
       case 'sent': return 'Sent'
       case 'drafts': return 'Drafts'
-      case 'deleted': return 'Deleted'
+      case 'deleted': return 'Thùng rác'
       case 'client': return 'Client'
       case 'spam': return 'Spam'
       default: return 'Email'
@@ -693,30 +738,55 @@ export default function InboxPage() {
                   />
                 </div>
 
-                {checkedEmailIds.size > 0 ? (
+                 {checkedEmailIds.size > 0 ? (
                   /* ── Bulk Actions Menu (shown when one or more emails are checked) ── */
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleBulkAction('archive')}
-                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
-                      title="Lưu trữ"
-                    >
-                      <Archive className="w-[18px] h-[18px]" />
-                    </button>
-                    <button
-                      onClick={() => handleBulkAction('spam')}
-                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
-                      title="Báo cáo Spam"
-                    >
-                      <AlertOctagon className="w-[18px] h-[18px]" />
-                    </button>
-                    <button
-                      onClick={() => handleBulkAction('delete')}
-                      className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
-                      title="Xóa thư"
-                    >
-                      <Trash2 className="w-[18px] h-[18px]" />
-                    </button>
+                    {activeCategory === "deleted" ? (
+                      <>
+                        <button
+                          onClick={() => handleBulkAction('restore')}
+                          className="p-2 rounded-full hover:bg-indigo-50 transition-colors text-indigo-600 cursor-pointer"
+                          title="Khôi phục thư"
+                        >
+                          <RotateCcw className="w-[18px] h-[18px]" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm("Bạn có chắc chắn muốn xóa vĩnh viễn các thư đã chọn? Hành động này không thể hoàn tác.")) {
+                              handleBulkAction('permanent_delete')
+                            }
+                          }}
+                          className="p-2 rounded-full hover:bg-red-50 transition-colors text-red-600 cursor-pointer"
+                          title="Xóa vĩnh viễn"
+                        >
+                          <Trash2 className="w-[18px] h-[18px]" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleBulkAction('archive')}
+                          className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                          title="Lưu trữ"
+                        >
+                          <Archive className="w-[18px] h-[18px]" />
+                        </button>
+                        <button
+                          onClick={() => handleBulkAction('spam')}
+                          className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                          title="Báo cáo Spam"
+                        >
+                          <AlertOctagon className="w-[18px] h-[18px]" />
+                        </button>
+                        <button
+                          onClick={() => handleBulkAction('delete')}
+                          className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
+                          title="Xóa thư (Di chuyển vào Thùng rác)"
+                        >
+                          <Trash2 className="w-[18px] h-[18px]" />
+                        </button>
+                      </>
+                    )}
                     
                     <div style={{ width: 1, height: 20, background: "var(--border-color)", margin: "0 4px" }} />
                     
@@ -852,6 +922,22 @@ export default function InboxPage() {
 
         {/* ── Email List — Scrollable ── */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
+          {activeCategory === "deleted" && (
+            <div 
+              className="flex items-center gap-3 p-3.5 mx-4 mt-4 text-xs rounded-xl animate-fade-in"
+              style={{
+                background: "rgba(99, 102, 241, 0.08)",
+                color: "var(--text-secondary)",
+                border: "1px solid rgba(99, 102, 241, 0.2)",
+              }}
+            >
+              <Trash2 className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+              <span>
+                Thư trong <strong>Thùng rác</strong> có thể được khôi phục hoặc sẽ tự động xóa vĩnh viễn sau 30 ngày.
+              </span>
+            </div>
+          )}
+
           {error && (
             <div
               className="text-xs rounded-xl"
@@ -941,21 +1027,49 @@ export default function InboxPage() {
                   <span>{action.label}</span>
                 </button>
               ))}
-              <div className="mx-1" style={{ width: 1, height: 16, background: "var(--border-color)" }} />
-              <button
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 hover:text-red-600"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
-              </button>
-              <button
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-amber-50 hover:text-amber-600"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                <Star className="w-3.5 h-3.5" />
-                <span>Important</span>
-              </button>
+              {activeCategory === "deleted" ? (
+                <>
+                  <button
+                    onClick={() => handleSingleAction(selectedEmail!.id, 'restore')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-indigo-50 hover:text-indigo-600 cursor-pointer"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Khôi phục</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm("Bạn có chắc chắn muốn xóa vĩnh viễn thư này? Hành động này không thể hoàn tác.")) {
+                        handleSingleAction(selectedEmail!.id, 'permanent_delete')
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                    <span>Xóa vĩnh viễn</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleSingleAction(selectedEmail!.id, 'delete')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                  <button
+                    onClick={() => handleSingleAction(selectedEmail!.id, 'important')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-amber-50 hover:text-amber-600 cursor-pointer"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    <Star className="w-3.5 h-3.5" />
+                    <span>Important</span>
+                  </button>
+                </>
+              )}
             </div>
             <Link
               to={`/emails/${selectedEmail!.id}`}

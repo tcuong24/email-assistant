@@ -482,6 +482,15 @@ public class EmailService {
         return emailRepository.findByUserIdAndCategoryOrderByReceivedAtDesc(userId, category);
     }
 
+    public Page<Email> getEmailsByUserAndLabel(Long userId, String label, Pageable pageable) {
+        try {
+            Email.EmailLabel emailLabel = Email.EmailLabel.valueOf(label.toUpperCase().strip());
+            return emailRepository.findByUserIdAndLabelOrderByReceivedAtDesc(userId, emailLabel, pageable);
+        } catch (IllegalArgumentException e) {
+            return org.springframework.data.domain.Page.empty();
+        }
+    }
+
     public Email getEmailById(Long id, Long userId) {
         return emailRepository.findById(id)
                 .filter(e -> e.getUserId().equals(userId))
@@ -548,6 +557,28 @@ public class EmailService {
                 }
             }
         }
+    }
+
+    @Transactional
+    public void bulkDelete(List<Long> emailIds, Long userId) {
+        if (emailIds == null || emailIds.isEmpty()) {
+            return;
+        }
+        List<Email> emails = emailRepository.findAllById(emailIds);
+        for (Email email : emails) {
+            if (email.getUserId().equals(userId)) {
+                emailRepository.delete(email);
+            }
+        }
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 0 2 * * ?") // Runs every day at 2:00 AM
+    @Transactional
+    public void autoCleanTrashEmails() {
+        log.info("Bắt đầu dọn dẹp Thùng rác (Xóa các thư đã xóa hơn 30 ngày)...");
+        java.time.LocalDateTime limitDate = java.time.LocalDateTime.now().minusDays(30);
+        int deletedCount = emailRepository.deleteOldTrashEmails(limitDate);
+        log.info("Đã tự động xóa vĩnh viễn {} thư trong Thùng rác.", deletedCount);
     }
 
     private void updateNylasMessageReadStatus(String grantId, String messageId, boolean isRead) {

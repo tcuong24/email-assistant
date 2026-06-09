@@ -45,16 +45,20 @@ public class EmailController {
                 .body(emailService.receiveEmail(request, userId));
     }
 
-    // Lấy danh sách email của user (có thể lọc theo category)
+    // Lấy danh sách email của user (có thể lọc theo category hoặc label)
     @GetMapping
     public ResponseEntity<Page<Email>> getEmails(
             @RequestHeader("X-User-Id") Long userId,
             @RequestParam(required = false) EmailCategory category,
+            @RequestParam(required = false) String label,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("receivedAt").descending());
         if (category != null) {
             return ResponseEntity.ok(emailService.getEmailsByUserAndCategory(userId, category, pageable));
+        }
+        if (label != null && !label.isEmpty()) {
+            return ResponseEntity.ok(emailService.getEmailsByUserAndLabel(userId, label, pageable));
         }
         return ResponseEntity.ok(emailService.getEmailsByUser(userId, pageable));
     }
@@ -104,12 +108,26 @@ public class EmailController {
         private Boolean isRead;
     }
 
+    @lombok.Data
+    public static class BulkDeleteRequest {
+        private List<Long> emailIds;
+    }
+
     // Cập nhật hàng loạt email (đánh dấu quan trọng, spam, xóa, đọc/chưa đọc)
     @PatchMapping("/bulk")
     public ResponseEntity<Void> bulkUpdateEmails(
             @RequestBody @Valid BulkUpdateRequest request,
             @RequestHeader("X-User-Id") Long userId) {
         emailService.bulkUpdate(request.getEmailIds(), request.getLabel(), request.getCategory(), request.getIsRead(), userId);
+        return ResponseEntity.ok().build();
+    }
+
+    // Xóa vĩnh viễn hàng loạt email
+    @org.springframework.web.bind.annotation.DeleteMapping("/bulk")
+    public ResponseEntity<Void> bulkDeleteEmails(
+            @RequestBody @Valid BulkDeleteRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        emailService.bulkDelete(request.getEmailIds(), userId);
         return ResponseEntity.ok().build();
     }
 
