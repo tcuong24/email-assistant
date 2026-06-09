@@ -24,10 +24,14 @@ public class EmailEventDto {
         private String snippet;
         private boolean hasAttachments;
         private String fromName;
+        private String toAddress;
+        private String toName;
         private String threadId;
         private String messageId;
         @JsonProperty("isRead")
         private boolean isRead;
+        @JsonProperty("isStarred")
+        private boolean isStarred;
         private String category; // PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
     }
 
@@ -49,6 +53,8 @@ public class EmailEventDto {
         private String threadId;
         @JsonProperty("isRead")
         private boolean isRead;
+        @JsonProperty("isStarred")
+        private boolean isStarred;
         private String category; // PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS
         private String threadContext;
     }

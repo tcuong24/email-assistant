@@ -25,6 +25,8 @@ import {
   CheckSquare,
   Calendar,
   BarChart3,
+  Bookmark,
+  Archive,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -118,12 +120,14 @@ export default function Sidebar({
 
   const emailItems = [
     { id: "PRIMARY", label: "Hộp thư", icon: Inbox, badge: inboxCount },
-    { id: "important", label: "Quan trọng", icon: Star },
+    { id: "starred", label: "Đã gắn dấu sao", icon: Star },
+    { id: "important", label: "Quan trọng", icon: Bookmark },
   ]
 
   const moreEmailItems = [
     { id: "sent", label: "Đã gửi", icon: Send },
     { id: "drafts", label: "Thư nháp", icon: FileText },
+    { id: "archived", label: "Lưu trữ", icon: Archive },
     { id: "spam", label: "Thư rác", icon: AlertCircle },
     { id: "deleted", label: "Thùng rác", icon: Trash2 },
   ]

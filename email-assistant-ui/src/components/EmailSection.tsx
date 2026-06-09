@@ -11,9 +11,12 @@ export interface Email {
   summary?: string
   receivedAt?: string
   isUnread?: boolean
+  isStarred?: boolean
   snippet?: string
   hasAttachments?: boolean
   fromName?: string;
+  toAddress?: string;
+  toName?: string;
   threadId?: string;
   isRead?: boolean;
   threadCount?: number; 
@@ -30,6 +33,7 @@ interface EmailSectionProps {
   isChecked?: boolean
   onCheckToggle?: (id: string | number, e: React.MouseEvent) => void
   onStarToggle?: (id: string | number, e: React.MouseEvent) => void
+  onImportantToggle?: (id: string | number, e: React.MouseEvent) => void
 }
 
 // Generate a consistent color from the email address
@@ -111,9 +115,17 @@ const EmailSection = ({
   onClick,
   isChecked = false,
   onCheckToggle,
-  onStarToggle
+  onStarToggle,
+  onImportantToggle
 }: EmailSectionProps) => {
   const isUnread = email.isRead !== true ? true : false;
+  const isSent = email.category === "SENT" || email.label === "SENT" || email.fromName === "Me" || email.fromName === "Tôi";
+  const displayAddress = isSent ? (email.toAddress || email.fromAddress) : email.fromAddress;
+  let toDisplay = email.toName || "";
+  if (!toDisplay || toDisplay.includes("@")) {
+    toDisplay = email.toAddress ? email.toAddress.split("@")[0] : "";
+  }
+  const displaySender = isSent ? `Đến:${toDisplay || "tôi"}` : (email.fromName || email.fromAddress.split("@")[0]);
 
   // ─── Horizontal Layout (Full-width Gmail style) ───
   if (layoutMode === "horizontal") {
@@ -137,7 +149,7 @@ const EmailSection = ({
         }}
       >
         {/* Checkbox area */}
-        <div className="flex items-center gap-1 flex-shrink-0" style={{ width: 56 }}>
+        <div className="flex items-center gap-1 flex-shrink-0" style={{ width: 80 }}>
           <input
             type="checkbox"
             checked={isChecked}
@@ -151,7 +163,7 @@ const EmailSection = ({
             className="w-[18px] h-[18px] rounded cursor-pointer accent-[var(--accent-primary)]"
             style={{ margin: "0 4px" }}
           />
-          {/* Star */}
+          {/* Star (Starred) */}
           <button
             onClick={(e) => { 
               e.stopPropagation();
@@ -160,14 +172,39 @@ const EmailSection = ({
               }
             }}
             className="p-0.5 transition-colors flex-shrink-0"
-            style={{ color: email.label === 'IMPORTANT' ? '#F59E0B' : '#D1D5DB' }}
+            style={{ color: email.isStarred ? '#F59E0B' : '#D1D5DB' }}
+            title={email.isStarred ? "Bỏ gắn dấu sao" : "Gắn dấu sao"}
           >
             <Star
               className="w-[18px] h-[18px]"
               style={{
-                fill: email.label === 'IMPORTANT' ? '#F59E0B' : 'none',
+                fill: email.isStarred ? '#F59E0B' : 'none',
               }}
             />
+          </button>
+          {/* Importance Tag (Important) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onImportantToggle) {
+                onImportantToggle(email.id, e);
+              }
+            }}
+            className="p-0.5 transition-colors flex-shrink-0"
+            style={{ color: email.label === 'IMPORTANT' ? '#F59E0B' : '#D1D5DB' }}
+            title={email.label === 'IMPORTANT' ? "Đánh dấu là không quan trọng" : "Đánh dấu là quan trọng (AI/Thủ công)"}
+          >
+            <svg
+              className="w-[18px] h-[18px]"
+              viewBox="0 0 24 24"
+              fill={email.label === 'IMPORTANT' ? '#F59E0B' : 'none'}
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="6,2 18,12 6,22 10,12" />
+            </svg>
           </button>
         </div>
 
@@ -182,7 +219,7 @@ const EmailSection = ({
             paddingRight: 12,
           }}
         >
-          <span className="truncate">{email.fromName || email.fromAddress.split("@")[0]}</span>
+          <span className="truncate">{displaySender}</span>
           {email.threadCount !== undefined && email.threadCount > 1 && (
             <span className="text-[12px] font-semibold text-gray-500 flex-shrink-0">
               {email.threadCount}
@@ -281,9 +318,9 @@ const EmailSection = ({
       <div className="relative flex-shrink-0">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold"
-          style={{ background: getAvatarColor(email.fromAddress) }}
+          style={{ background: getAvatarColor(displayAddress) }}
         >
-          {getInitials(email.fromAddress)}
+          {getInitials(displayAddress)}
         </div>
         {/* Unread dot */}
         {isUnread && (
@@ -308,7 +345,7 @@ const EmailSection = ({
               fontWeight: isUnread ? 700 : 500,
             }}
           >
-            <span className="truncate">{email.fromName || email.fromAddress.split("@")[0]}</span>
+            <span className="truncate">{displaySender}</span>
             {email.threadCount !== undefined && email.threadCount > 1 && (
               <span className="text-[11px] font-semibold text-gray-500">
                 ({email.threadCount})

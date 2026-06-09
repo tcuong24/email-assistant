@@ -12,11 +12,14 @@ export type Email = {
     id: number | string
     fromAddress: string
     fromName?: string
+    toAddress?: string
+    toName?: string
     subject: string
     body: string
     label: string
     summary?: string
     suggestedReplies?: string
+    isStarred?: boolean
     actionItems?: string
     userId: number | string
     receivedAt: string
@@ -42,10 +45,11 @@ export interface Page<T> {
     number: number
 }
 
-export const getEmails       = (category?: string, label?: string, page = 0, size = 50) => {
+export const getEmails       = (category?: string, label?: string, page = 0, size = 50, starred?: boolean) => {
     let url = `/emails?page=${page}&size=${size}`
     if (category) url += `&category=${category}`
     if (label) url += `&label=${label}`
+    if (starred !== undefined) url += `&starred=${starred}`
     return api.get<Page<Email>>(url)
 }
 export const getSentEmails   = (page = 0, size = 50) => api.get<Page<Email>>(`/emails/sent?page=${page}&size=${size}`)
@@ -58,7 +62,7 @@ export const getNylasStatus  = () => api.get<{ connected: boolean }>('/emails/ny
 export const syncEmails      = () => api.post<{ status: string, message: string }>('/emails/sync')
 export const getThreadEmails = (threadId: string) => api.get<Email[]>(`/emails/thread/${threadId}`)
 export const updateReadStatus = (id: number | string, isRead: boolean) => api.patch<Email>(`/emails/${id}/read?isRead=${isRead}`)
-export const bulkUpdateEmails = (data: { emailIds: (number | string)[], label?: string, category?: string, isRead?: boolean }) => api.patch<void>('/emails/bulk', data)
+export const bulkUpdateEmails = (data: { emailIds: (number | string)[], label?: string, category?: string, isRead?: boolean, isStarred?: boolean }) => api.patch<void>('/emails/bulk', data)
 export const bulkDeleteEmails = (emailIds: (number | string)[]) => api.delete<void>('/emails/bulk', { data: { emailIds } })
 
 export type SendEmailPayload = {

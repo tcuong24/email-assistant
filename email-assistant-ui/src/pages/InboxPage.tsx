@@ -81,14 +81,25 @@ export default function InboxPage() {
     })
   }
 
-  const handleStarToggle = async (id: string | number, currentLabel: string) => {
+  const handleStarToggle = async (id: string | number, currentStarred?: boolean) => {
+    const nextStarred = !currentStarred
+    try {
+      await bulkUpdateEmails({ emailIds: [id], isStarred: nextStarred })
+      refetch()
+    } catch (err) {
+      console.error("Failed to toggle star", err)
+      toast.error("Không thể thay đổi trạng thái gắn dấu sao.")
+    }
+  }
+
+  const handleImportantToggle = async (id: string | number, currentLabel: string) => {
     const nextLabel = currentLabel === "IMPORTANT" ? "NORMAL" : "IMPORTANT"
     try {
       await bulkUpdateEmails({ emailIds: [id], label: nextLabel })
       refetch()
     } catch (err) {
-      console.error("Failed to toggle star", err)
-      toast.error("Không thể đánh dấu quan trọng.")
+      console.error("Failed to toggle important", err)
+      toast.error("Không thể thay đổi trạng thái quan trọng.")
     }
   }
 
@@ -104,7 +115,7 @@ export default function InboxPage() {
       } else if (action === 'delete') {
         await bulkUpdateEmails({ emailIds, category: 'DELETED' })
       } else if (action === 'archive') {
-        await bulkUpdateEmails({ emailIds, label: 'NORMAL' })
+        await bulkUpdateEmails({ emailIds, category: 'ARCHIVED' })
       } else if (action === 'read') {
         await bulkUpdateEmails({ emailIds, isRead: true })
       } else if (action === 'unread') {
@@ -135,7 +146,7 @@ export default function InboxPage() {
       } else if (action === 'delete') {
         await bulkUpdateEmails({ emailIds, category: 'DELETED' })
       } else if (action === 'archive') {
-        await bulkUpdateEmails({ emailIds, label: 'NORMAL' })
+        await bulkUpdateEmails({ emailIds, category: 'ARCHIVED' })
       } else if (action === 'read') {
         await bulkUpdateEmails({ emailIds, isRead: true })
       } else if (action === 'unread') {
@@ -273,6 +284,12 @@ export default function InboxPage() {
       if (activeCategory === "important") {
         return getEmails(undefined, "IMPORTANT", currentPage, 50).then(r => r.data)
       }
+      if (activeCategory === "starred") {
+        return getEmails(undefined, undefined, currentPage, 50, true).then(r => r.data)
+      }
+      if (activeCategory === "archived") {
+        return getEmails("ARCHIVED", undefined, currentPage, 50).then(r => r.data)
+      }
       return getEmails(undefined, undefined, currentPage, 50).then(r => r.data)
     },
     refetchInterval: refetchIntervalState,
@@ -387,9 +404,13 @@ export default function InboxPage() {
     const categoryUpper = (email.category || "PRIMARY").toUpperCase()
 
     if (activeCategory === "inbox") {
-      matchesCategory = categoryUpper !== "SPAM" && categoryUpper !== "SENT" && categoryUpper !== "DRAFTS" && categoryUpper !== "DELETED" && categoryUpper === activeTab
+      matchesCategory = categoryUpper !== "SPAM" && categoryUpper !== "SENT" && categoryUpper !== "DRAFTS" && categoryUpper !== "DELETED" && categoryUpper !== "ARCHIVED" && categoryUpper === activeTab
     } else if (activeCategory === "important") {
       matchesCategory = labelUpper === "IMPORTANT"
+    } else if (activeCategory === "starred") {
+      matchesCategory = email.isStarred === true
+    } else if (activeCategory === "archived") {
+      matchesCategory = categoryUpper === "ARCHIVED"
     } else if (activeCategory === "sent") {
       matchesCategory = categoryUpper === "SENT"
     } else if (activeCategory === "drafts") {
@@ -450,6 +471,8 @@ export default function InboxPage() {
   const [isComposeOpen, setIsComposeOpen] = useState(false)
   const [replyBody, setReplyBody] = useState("")
   const [isSendingReply, setIsSendingReply] = useState(false)
+  const [replyMode, setReplyMode] = useState<"reply" | "reply_all" | "forward">("reply")
+  const [forwardTo, setForwardTo] = useState("")
 
   // Lấy tất cả email trong cùng luồng khi có 1 thư được chọn
   const { data: threadEmails, isLoading: isThreadLoading, refetch: refetchThread } = useQuery({
@@ -501,6 +524,53 @@ export default function InboxPage() {
     }
   }
 
+  const handleReplyClick = (mode: "reply" | "reply_all") => {
+    setReplyMode(mode);
+    setReplyBody("");
+    setForwardTo("");
+    
+    setTimeout(() => {
+      const container = document.getElementById("reply-box-container");
+      if (container) {
+        container.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+      const replyInput = document.getElementById("reply-textarea");
+      if (replyInput) {
+        replyInput.focus();
+      }
+    }, 100);
+  };
+
+  const handleForwardClick = () => {
+    setReplyMode("forward");
+    setForwardTo("");
+    const lastEmail = displayEmails[displayEmails.length - 1] || selectedEmail;
+    if (lastEmail) {
+      const formattedDate = new Date(lastEmail.receivedAt || "").toLocaleString("vi-VN");
+      const cleanBody = lastEmail.body ? lastEmail.body.replace(/<[^>]*>/g, "") : "";
+      
+      const forwardHeader = `\n\n---------- Forwarded message ---------\n` +
+        `Từ: ${lastEmail.fromName || ""} <${lastEmail.fromAddress}>\n` +
+        `Ngày: ${formattedDate}\n` +
+        `Chủ đề: ${lastEmail.subject}\n` +
+        `Đến: ${lastEmail.toAddress || "tôi"}\n\n` +
+        `${cleanBody}`;
+      
+      setReplyBody(forwardHeader);
+    }
+    
+    setTimeout(() => {
+      const container = document.getElementById("reply-box-container");
+      if (container) {
+        container.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+      const toInput = document.getElementById("forward-to-input");
+      if (toInput) {
+        toInput.focus();
+      }
+    }, 100);
+  };
+
   const handleApplySuggestion = (suggestion: string) => {
     setReplyBody(suggestion.trim())
     const replyInput = document.getElementById("reply-textarea")
@@ -510,16 +580,23 @@ export default function InboxPage() {
   }
 
   const handleSendReply = async () => {
-    if (!replyBody.trim() || !selectedEmail) return
+    const lastEmail = displayEmails[displayEmails.length - 1] || selectedEmail;
+    if (!replyBody.trim() || !lastEmail) return;
+    
+    const destination = replyMode === "forward" ? forwardTo : lastEmail.fromAddress;
+    const subjectPrefix = replyMode === "forward" ? "Fwd:" : "Re:";
+    const subject = lastEmail.subject.startsWith(subjectPrefix) ? lastEmail.subject : `${subjectPrefix} ${lastEmail.subject}`;
+    
     setIsSendingReply(true)
     try {
       await sendEmail({
-        to: selectedEmail.fromAddress,
-        subject: selectedEmail.subject.startsWith("Re:") ? selectedEmail.subject : `Re: ${selectedEmail.subject}`,
-        body: replyBody,
-        replyToMessageId: selectedEmail.messageId || selectedEmail.id.toString(),
+        to: destination,
+        subject: subject,
+        body: replyBody.trim(),
+        replyToMessageId: lastEmail.messageId || lastEmail.id.toString(),
       })
       setReplyBody("")
+      setForwardTo("")
       refetchThread()
     } catch (err) {
       console.error("Gửi phản hồi thất bại:", err)
@@ -956,7 +1033,8 @@ export default function InboxPage() {
               onClick={() => setSelectedEmailId(email.id)}
               isChecked={checkedEmailIds.has(email.id)}
               onCheckToggle={() => handleCheckToggle(email.id)}
-              onStarToggle={() => handleStarToggle(email.id, email.label)}
+              onStarToggle={() => handleStarToggle(email.id, email.isStarred)}
+              onImportantToggle={() => handleImportantToggle(email.id, email.label)}
             />
           ))}
 
@@ -1014,13 +1092,14 @@ export default function InboxPage() {
                 <X className="w-4 h-4" />
               </button>
               {[
-                { icon: Reply, label: "Reply", rotate: false },
-                { icon: Reply, label: "Reply all", rotate: true },
-                { icon: CornerUpRight, label: "Forward", rotate: false },
+                { icon: Reply, label: "Reply", rotate: false, onClick: () => handleReplyClick("reply") },
+                { icon: Reply, label: "Reply all", rotate: true, onClick: () => handleReplyClick("reply_all") },
+                { icon: CornerUpRight, label: "Forward", rotate: false, onClick: handleForwardClick },
               ].map((action, i) => (
                 <button
                   key={i}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-gray-100"
+                  onClick={action.onClick}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-gray-100 cursor-pointer"
                   style={{ color: "var(--text-secondary)" }}
                 >
                   <action.icon className={`w-3.5 h-3.5 ${action.rotate ? "scale-x-[-1]" : ""}`} />
@@ -1050,8 +1129,36 @@ export default function InboxPage() {
                     <span>Xóa vĩnh viễn</span>
                   </button>
                 </>
+              ) : activeCategory === "archived" ? (
+                <>
+                  <button
+                    onClick={() => handleSingleAction(selectedEmail!.id, 'restore')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-indigo-50 hover:text-indigo-600 cursor-pointer"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Chuyển về Hộp thư</span>
+                  </button>
+                  <button
+                    onClick={() => handleSingleAction(selectedEmail!.id, 'delete')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </>
               ) : (
                 <>
+                  <button
+                    onClick={() => handleSingleAction(selectedEmail!.id, 'archive')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-gray-100 hover:text-gray-900 cursor-pointer"
+                    style={{ color: "var(--text-secondary)" }}
+                    title="Lưu trữ thư này"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>Archive</span>
+                  </button>
                   <button
                     onClick={() => handleSingleAction(selectedEmail!.id, 'delete')}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 hover:text-red-600 cursor-pointer"
@@ -1175,8 +1282,14 @@ export default function InboxPage() {
                                   })}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-gray-400 mt-1 mb-0 flex gap-2">
-                                <span>To: me</span>
+                              <p className="text-[11px] text-gray-400 mt-1 mb-0 flex gap-2 items-center">
+                                <span>
+                                  {emailItem.category === 'SENT' || emailItem.label === 'SENT' || emailItem.fromName === 'Me' || emailItem.fromName === 'Tôi' ? (
+                                    `Đến: ${emailItem.toName ? `${emailItem.toName} <${emailItem.toAddress}>` : (emailItem.toAddress || 'tôi')}`
+                                  ) : (
+                                    `Đến: tôi`
+                                  )}
+                                </span>
                                 {emailItem.label && (
                                   <>
                                     <span>•</span>
@@ -1294,29 +1407,71 @@ export default function InboxPage() {
                 })}
 
                 {/* Reply Box at the bottom of the thread stack */}
-                <div className="border rounded-xl p-4 bg-white shadow-sm mt-2 flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold bg-indigo-600">
-                      Me
+                <div id="reply-box-container" className="border rounded-xl p-4 bg-white shadow-sm mt-2 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold bg-indigo-600">
+                        Me
+                      </div>
+                      <span className="text-xs font-semibold text-gray-700">
+                        {replyMode === "forward" ? "Chuyển tiếp thư" : replyMode === "reply_all" ? "Trả lời tất cả:" : "Trả lời cho:"} 
+                        {replyMode !== "forward" && ` ${displayEmails[displayEmails.length - 1]?.fromAddress || selectedEmail.fromAddress}`}
+                      </span>
                     </div>
-                    <span className="text-xs font-semibold text-gray-700">Trả lời cho: {selectedEmail.fromAddress}</span>
+                    {/* Mode switcher tabs */}
+                    <div className="flex bg-gray-100 rounded-lg p-0.5 text-[11px] font-semibold">
+                      <button
+                        onClick={() => handleReplyClick("reply")}
+                        className={`px-2 py-1 rounded-md transition-all cursor-pointer ${replyMode === "reply" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                      >
+                        Reply
+                      </button>
+                      <button
+                        onClick={() => handleReplyClick("reply_all")}
+                        className={`px-2 py-1 rounded-md transition-all cursor-pointer ${replyMode === "reply_all" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                      >
+                        Reply All
+                      </button>
+                      <button
+                        onClick={handleForwardClick}
+                        className={`px-2 py-1 rounded-md transition-all cursor-pointer ${replyMode === "forward" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                      >
+                        Forward
+                      </button>
+                    </div>
                   </div>
+
+                  {/* If Forward mode, show "To" input field */}
+                  {replyMode === "forward" && (
+                    <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                      <span className="text-xs font-semibold text-gray-500 min-w-[32px]">Đến:</span>
+                      <input
+                        id="forward-to-input"
+                        type="email"
+                        value={forwardTo}
+                        onChange={(e) => setForwardTo(e.target.value)}
+                        placeholder="Nhập địa chỉ email người nhận..."
+                        className="w-full outline-none text-xs text-gray-700 border-none bg-transparent"
+                      />
+                    </div>
+                  )}
+
                   <textarea
                     id="reply-textarea"
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
-                    placeholder="Viết câu trả lời của bạn ở đây..."
+                    placeholder={replyMode === "forward" ? "Nội dung chuyển tiếp..." : "Viết câu trả lời của bạn ở đây..."}
                     className="w-full min-h-[100px] outline-none text-sm border border-gray-200 rounded-lg p-3 bg-gray-50/20 focus:bg-white focus:border-indigo-300 transition-all resize-y"
                   />
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={handleSendReply}
-                      disabled={isSendingReply || !replyBody.trim()}
+                      disabled={isSendingReply || (replyMode === "forward" ? !forwardTo.trim() || !replyBody.trim() : !replyBody.trim())}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-50 disabled:scale-100 cursor-pointer"
                       style={{ background: "var(--accent-primary)", border: "none" }}
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>{isSendingReply ? "Đang gửi..." : "Gửi phản hồi"}</span>
+                      <span>{isSendingReply ? "Đang gửi..." : replyMode === "forward" ? "Chuyển tiếp" : "Gửi phản hồi"}</span>
                     </button>
                   </div>
                 </div>

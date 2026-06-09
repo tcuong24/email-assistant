@@ -45,15 +45,19 @@ public class EmailController {
                 .body(emailService.receiveEmail(request, userId));
     }
 
-    // Lấy danh sách email của user (có thể lọc theo category hoặc label)
+    // Lấy danh sách email của user (có thể lọc theo category hoặc label hoặc starred)
     @GetMapping
     public ResponseEntity<Page<Email>> getEmails(
             @RequestHeader("X-User-Id") Long userId,
             @RequestParam(required = false) EmailCategory category,
             @RequestParam(required = false) String label,
+            @RequestParam(required = false) Boolean starred,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("receivedAt").descending());
+        if (starred != null) {
+            return ResponseEntity.ok(emailService.getEmailsByUserAndStarred(userId, starred, pageable));
+        }
         if (category != null) {
             return ResponseEntity.ok(emailService.getEmailsByUserAndCategory(userId, category, pageable));
         }
@@ -106,6 +110,7 @@ public class EmailController {
         private String label;
         private String category;
         private Boolean isRead;
+        private Boolean isStarred;
     }
 
     @lombok.Data
@@ -118,7 +123,7 @@ public class EmailController {
     public ResponseEntity<Void> bulkUpdateEmails(
             @RequestBody @Valid BulkUpdateRequest request,
             @RequestHeader("X-User-Id") Long userId) {
-        emailService.bulkUpdate(request.getEmailIds(), request.getLabel(), request.getCategory(), request.getIsRead(), userId);
+        emailService.bulkUpdate(request.getEmailIds(), request.getLabel(), request.getCategory(), request.getIsRead(), request.getIsStarred(), userId);
         return ResponseEntity.ok().build();
     }
 
@@ -280,10 +285,19 @@ public class EmailController {
                             fromName = (String) fromList.get(0).get("name");
                         }
 
+                        List<Map<String, Object>> toList = (List<Map<String, Object>>) object.get("to");
+                        String toAddress = "";
+                        String toName = "";
+                        if (toList != null && !toList.isEmpty()) {
+                            toAddress = (String) toList.get(0).get("email");
+                            toName = (String) toList.get(0).get("name");
+                        }
+
                         String threadId = (String) object.get("thread_id");
                         String messageId = (String) object.get("id");
                         boolean unread = object.get("unread") != null ? (boolean) object.get("unread") : true;
                         boolean isRead = !unread;
+                        boolean starred = object.get("starred") != null ? (boolean) object.get("starred") : false;
                         String snippet = (String) object.get("snippet");
                         java.util.List<?> attachments = (java.util.List<?>) object.get("attachments");
                         boolean hasAttachments = attachments != null && !attachments.isEmpty();
@@ -301,9 +315,12 @@ public class EmailController {
                             request.setSnippet(snippet != null ? snippet : "");
                             request.setHasAttachments(hasAttachments);
                             request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
+                            request.setToAddress(toAddress != null ? toAddress : "");
+                            request.setToName(toName != null && !toName.isEmpty() ? toName : toAddress);
                             request.setThreadId(threadId);
                             request.setMessageId(messageId);
                             request.setRead(isRead);
+                            request.setStarred(starred);
                             Email savedEmail = emailService.receiveEmail(request, userId);
                             log.info("Email saved with ID: {}", savedEmail.getId());
                             if (hasAttachments && attachments != null) {

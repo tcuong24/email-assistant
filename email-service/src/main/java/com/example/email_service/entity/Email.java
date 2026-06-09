@@ -74,6 +74,8 @@ public class Email {
     private boolean hasAttachments = false;
     
     private String fromName; 
+    private String toAddress;
+    private String toName;
     private String threadId; 
     
     @Column(unique = true)
@@ -82,6 +84,9 @@ public class Email {
     @JsonProperty("isRead")
     @Builder.Default
     private boolean isRead = false;
+
+    @Builder.Default
+    private boolean isStarred = false;
     
     @Column(columnDefinition = "TEXT")
     private String actionItems;
@@ -99,6 +104,6 @@ public class Email {
     }
 
     public enum EmailCategory {
-        PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS, SENT, SPAM, DELETED
+        PRIMARY, SOCIAL, PROMOTIONS, UPDATES, FORUMS, SENT, SPAM, DELETED, ARCHIVED
     }
 }

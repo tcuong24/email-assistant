@@ -104,10 +104,19 @@ public class EmailService {
                 fromName = (String) fromList.get(0).get("name");
             }
 
+            List<Map<String, Object>> toList = (List<Map<String, Object>>) msg.get("to");
+            String toAddress = "";
+            String toName = "";
+            if (toList != null && !toList.isEmpty()) {
+                toAddress = (String) toList.get(0).get("email");
+                toName = (String) toList.get(0).get("name");
+            }
+
             String threadId = (String) msg.get("thread_id");
             String messageId = (String) msg.get("id");
             boolean unread = msg.get("unread") != null ? (boolean) msg.get("unread") : true;
             boolean isRead = !unread;
+            boolean starred = msg.get("starred") != null ? (boolean) msg.get("starred") : false;
 
             List<String> folders = (List<String>) msg.get("folders");
             String categoryStr = (overrideCategory != null) ? overrideCategory.name() : extractCategory(folders).name();
@@ -120,9 +129,12 @@ public class EmailService {
             request.setReceivedAt(emailDate);
             request.setFromAddress(fromAddress != null ? fromAddress : "");
             request.setFromName(fromName != null && !fromName.isEmpty() ? fromName : fromAddress);
+            request.setToAddress(toAddress != null ? toAddress : "");
+            request.setToName(toName != null && !toName.isEmpty() ? toName : toAddress);
             request.setThreadId(threadId);
             request.setMessageId(messageId);
             request.setRead(isRead);
+            request.setStarred(starred);
             request.setCategory(categoryStr);
 
             Email savedEmail = this.receiveEmail(request, userId, overrideLabel);
@@ -348,6 +360,9 @@ public class EmailService {
                 .snippet(request.getSnippet())
                 .hasAttachments(request.isHasAttachments())
                 .receivedAt(request.getReceivedAt() != null ? request.getReceivedAt() : LocalDateTime.now())
+                .toAddress(request.getToAddress())
+                .toName(request.getToName())
+                .isStarred(request.isStarred())
                 .build();
 
         final Email savedEmail = emailRepository.save(email);
@@ -491,6 +506,10 @@ public class EmailService {
         }
     }
 
+    public Page<Email> getEmailsByUserAndStarred(Long userId, boolean starred, Pageable pageable) {
+        return emailRepository.findByUserIdAndIsStarredOrderByReceivedAtDesc(userId, starred, pageable);
+    }
+
     public Email getEmailById(Long id, Long userId) {
         return emailRepository.findById(id)
                 .filter(e -> e.getUserId().equals(userId))
@@ -516,7 +535,7 @@ public class EmailService {
     }
 
     @Transactional
-    public void bulkUpdate(List<Long> emailIds, String label, String category, Boolean isRead, Long userId) {
+    public void bulkUpdate(List<Long> emailIds, String label, String category, Boolean isRead, Boolean isStarred, Long userId) {
         if (emailIds == null || emailIds.isEmpty()) {
             return;
         }
@@ -547,13 +566,20 @@ public class EmailService {
                 email.setRead(isRead);
             }
 
+            if (isStarred != null) {
+                email.setStarred(isStarred);
+            }
+
             emailRepository.save(email);
 
-            // Đồng bộ trạng thái đọc lên Nylas
+            // Đồng bộ trạng thái đọc và dấu sao lên Nylas
             String grantId = findGrantIdByUserId(userId);
             if (grantId != null && !grantId.isEmpty() && email.getMessageId() != null && !email.getMessageId().isEmpty()) {
                 if (isRead != null) {
                     updateNylasMessageReadStatus(grantId, email.getMessageId(), isRead);
+                }
+                if (isStarred != null) {
+                    updateNylasMessageStarredStatus(grantId, email.getMessageId(), isStarred);
                 }
             }
         }
@@ -595,6 +621,23 @@ public class EmailService {
             log.info("Đã cập nhật trạng thái unread={} lên Nylas cho messageId={}", !isRead, messageId);
         } catch (Exception e) {
             log.error("Lỗi cập nhật trạng thái unread lên Nylas cho messageId={}: {}", messageId, e.getMessage());
+        }
+    }
+
+    private void updateNylasMessageStarredStatus(String grantId, String messageId, boolean isStarred) {
+        try {
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(nylasApiKey);
+
+            Map<String, Object> body = Map.of("starred", isStarred);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages/" + messageId;
+
+            restTemplate.exchange(url, HttpMethod.PUT, entity, Map.class);
+            log.info("Đã cập nhật trạng thái starred={} lên Nylas cho messageId={}", isStarred, messageId);
+        } catch (Exception e) {
+            log.error("Lỗi cập nhật trạng thái starred lên Nylas cho messageId={}: {}", messageId, e.getMessage());
         }
     }
 
@@ -808,6 +851,8 @@ public class EmailService {
                         .snippet(snippet)
                         .hasAttachments(false)
                         .receivedAt(LocalDateTime.now())
+                        .toAddress(request.getTo())
+                        .toName(request.getTo())
                         .build();
 
                 return emailRepository.save(email);
