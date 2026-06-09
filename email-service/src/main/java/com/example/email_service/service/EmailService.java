@@ -52,6 +52,7 @@ public class EmailService {
     private final AttachmentRepository attachmentRepository;
     private final CloudinaryService cloudinaryService;
     private final TaskRepository taskRepository;
+    private final jakarta.persistence.EntityManager entityManager;
 
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -896,5 +897,17 @@ public class EmailService {
             "important", important,
             "spam", spam
         );
+    }
+
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    @jakarta.transaction.Transactional
+    public void initDatabase() {
+        try {
+            log.info("Running manual database migration to add is_starred column if missing...");
+            entityManager.createNativeQuery("ALTER TABLE emails ADD COLUMN IF NOT EXISTS is_starred BOOLEAN DEFAULT FALSE").executeUpdate();
+            log.info("Database migration completed successfully!");
+        } catch (Exception e) {
+            log.warn("Manual database migration warning: {}", e.getMessage());
+        }
     }
 }
