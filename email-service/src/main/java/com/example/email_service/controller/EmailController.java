@@ -234,6 +234,56 @@ public class EmailController {
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK && response.getBody() != null) {
                 String grantId = (String) response.getBody().get("grant_id");
                 if (grantId != null) {
+`                    // Kiểm tra xem user có cấp đủ quyền đọc/gửi thư không
+                    boolean hasEnoughScopes = false;
+                    try {
+                        org.springframework.http.HttpHeaders getHeaders = new org.springframework.http.HttpHeaders();
+                        getHeaders.setBearerAuth(nylasApiKey);
+                        org.springframework.http.HttpEntity<Void> getEntity = new org.springframework.http.HttpEntity<>(getHeaders);
+                        org.springframework.http.ResponseEntity<java.util.Map> grantResponse = restTemplate.exchange(
+                                nylasApiUrl + "/v3/grants/" + grantId,
+                                org.springframework.http.HttpMethod.GET,
+                                getEntity,
+                                java.util.Map.class);
+                        if (grantResponse.getStatusCode() == org.springframework.http.HttpStatus.OK && grantResponse.getBody() != null) {
+                            java.util.Map data = (java.util.Map) grantResponse.getBody().get("data");
+                            if (data != null && data.containsKey("scopes")) {
+                                java.util.List<?> scopes = (java.util.List<?>) data.get("scopes");
+                                boolean hasRead = false;
+                                boolean hasSend = false;
+                                for (Object s : scopes) {
+                                    String scopeStr = String.valueOf(s);
+                                    if (scopeStr.contains("gmail.readonly")) {
+                                        hasRead = true;
+                                    }
+                                    if (scopeStr.contains("gmail.send")) {
+                                        hasSend = true;
+                                    }
+                                }
+                                hasEnoughScopes = hasRead && hasSend;
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.error("Lỗi khi kiểm tra scopes của grant {}: {}", grantId, ex.getMessage());
+                    }
+
+                    if (!hasEnoughScopes) {
+                        // Hủy grant không đủ quyền này trên Nylas
+                        try {
+                            org.springframework.http.HttpHeaders deleteHeaders = new org.springframework.http.HttpHeaders();
+                            deleteHeaders.setBearerAuth(nylasApiKey);
+                            org.springframework.http.HttpEntity<Void> deleteEntity = new org.springframework.http.HttpEntity<>(deleteHeaders);
+                            restTemplate.exchange(
+                                    nylasApiUrl + "/v3/grants/" + grantId,
+                                    org.springframework.http.HttpMethod.DELETE,
+                                    deleteEntity,
+                                    Void.class);
+                        } catch (Exception ex) {
+                            log.error("Không thể xóa grant không đủ quyền: {}", ex.getMessage());
+                        }
+                        return ResponseEntity.badRequest().body(java.util.Map.of("message", "Quyền truy cập không đầy đủ. Bạn cần tích chọn tất cả các quyền đọc (Read) và gửi (Send) thư của Gmail để sử dụng ứng dụng!"));
+                    }
+
                     emailService.saveNylasConnection(userId, grantId);
                     emailService.syncHistoricalEmails(grantId, userId, nylasApiKey, nylasApiUrl);
                     return ResponseEntity.ok(java.util.Map.of("status", "success", "grantId", grantId));

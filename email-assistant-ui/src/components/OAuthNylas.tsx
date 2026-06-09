@@ -17,7 +17,9 @@ export default function OAuthCallback() {
         })
         .catch(err => {
           console.error(err);
-          alert('Kết nối thất bại');
+          const errorMsg = err.response?.data?.message || 'Kết nối hòm thư thất bại. Vui lòng kiểm tra lại quyền truy cập!';
+          alert(errorMsg);
+          navigate('/dashboard');
         });
     }
   }, [code]);

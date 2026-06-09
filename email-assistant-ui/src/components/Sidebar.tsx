@@ -27,6 +27,7 @@ import {
   BarChart3,
   Bookmark,
   Archive,
+  X,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -46,6 +47,8 @@ export default function Sidebar({
   const [isConnected, setIsConnected] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [showMoreEmail, setShowMoreEmail] = useState(false)
+  const [showConnectModal, setShowConnectModal] = useState(false)
+  const [showTooltip, setShowTooltip] = useState(false)
   const { user, clearAuth } = useAuth()
   const navigate = useNavigate()
 
@@ -203,7 +206,7 @@ export default function Sidebar({
 
   return (
     <aside
-      className="flex flex-col justify-between select-none flex-shrink-0 overflow-hidden"
+      className="flex flex-col justify-between select-none flex-shrink-0 overflow-hidden !h-screen"
       style={{
         width: collapsed ? 60 : 220,
         minWidth: collapsed ? 60 : 220,
@@ -214,7 +217,10 @@ export default function Sidebar({
       }}
     >
       {/* Top Section */}
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-5 overflow-y-auto flex-1" style={{
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}>
         {/* Logo + Collapse */}
         <div
           className="flex items-center justify-between"
@@ -376,24 +382,37 @@ export default function Sidebar({
             )}
           </button>
         ) : (
-          <button
-            onClick={handleConnectEmail}
-            className="flex items-center gap-2.5 rounded-lg transition-all duration-200 hover:bg-white/10"
-            style={{
-              padding: collapsed ? "10px" : "8px 12px",
-              justifyContent: collapsed ? "center" : "flex-start",
-              width: "100%",
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
-            }}
-            title="Kết nối Email"
-          >
-            <LinkIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />
-            {!collapsed && (
-              <span className="text-xs font-medium text-blue-400">Kết nối Email</span>
+          <div className="relative w-full">
+            {/* Custom Tooltip */}
+            {showTooltip && (
+              <div
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg shadow-lg whitespace-nowrap z-50 pointer-events-none transition-opacity duration-150"
+                style={{ border: "1px solid rgba(255,255,255,0.15)" }}
+              >
+                Bạn chưa liên kết Gmail. Click để kết nối!
+                {/* Arrow */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900" />
+              </div>
             )}
-          </button>
+            <button
+              onClick={() => setShowConnectModal(true)}
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+              className="flex items-center gap-2.5 rounded-lg transition-all duration-200 hover:bg-white/10 w-full"
+              style={{
+                padding: collapsed ? "10px" : "8px 12px",
+                justifyContent: collapsed ? "center" : "flex-start",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+            >
+              <LinkIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />
+              {!collapsed && (
+                <span className="text-xs font-medium text-blue-400">Kết nối Email</span>
+              )}
+            </button>
+          </div>
         )}
 
         {/* User Info */}
@@ -449,6 +468,88 @@ export default function Sidebar({
           </button>
         </div>
       </div>
+
+      {/* Connection Guide Modal */}
+      {showConnectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+          {/* Modal Container */}
+          <div
+            className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col animate-scale-in text-gray-800"
+            style={{ border: "1px solid #E5E7EB" }}
+          >
+            {/* Header */}
+            <div className="px-5 py-3.5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <LinkIcon className="w-4.5 h-4.5 text-blue-600" />
+                Hướng dẫn kết nối Gmail
+              </h3>
+              <button
+                onClick={() => setShowConnectModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-200 cursor-pointer border-none bg-transparent"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 overflow-y-auto max-h-[70vh] flex flex-col gap-4">
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Hệ thống sử dụng cổng <strong>Nylas Sandbox</strong> để đồng bộ hóa Gmail an toàn. Vui lòng hoàn thành 2 bước sau:
+              </p>
+
+              {/* Step 1 */}
+              <div className="flex gap-3 p-3 rounded-xl bg-amber-50/50 border border-amber-100">
+                <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                  1
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-900 text-xs mb-0.5">Bước 1: Cuộn xuống để tiếp tục</h4>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    Tại màn hình <strong>Nylas Hosted Authentication</strong> (trang có cảnh báo bảo mật sandbox),
+                    hãy <strong>cuộn xuống dưới cùng của trang</strong> để tiếp tục xác thực.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="flex gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                  2
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-900 text-xs mb-0.5">Bước 2: Chọn tất cả quyền</h4>
+                  <p className="text-[11px] text-gray-600 leading-relaxed mb-1.5">
+                    Tại trang đăng nhập Google, phần <strong>"Chọn những dịch vụ Nylas có thể truy cập"</strong>:
+                  </p>
+                  <div className="p-2 bg-white rounded-lg border border-blue-100 text-[10px] text-blue-900 leading-normal font-semibold">
+                    <span className="inline-block px-1 rounded bg-blue-100 text-blue-700 text-[9px] mr-1.5">QUAN TRỌNG</span>
+                    Tích chọn <strong>"Chọn tất cả"</strong> (hoặc chọn toàn bộ các dịch vụ hiển thị) để kích hoạt các tính năng của Gmail.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2.5">
+              <button
+                onClick={() => setShowConnectModal(false)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={() => {
+                  setShowConnectModal(false);
+                  handleConnectEmail();
+                }}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm active:scale-95 border-none cursor-pointer"
+              >
+                Tiếp tục kết nối
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   )
 }
