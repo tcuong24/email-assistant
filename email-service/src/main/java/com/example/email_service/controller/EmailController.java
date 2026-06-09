@@ -249,14 +249,15 @@ public class EmailController {
                             java.util.Map data = (java.util.Map) grantResponse.getBody().get("data");
                             if (data != null && data.containsKey("scopes")) {
                                 java.util.List<?> scopes = (java.util.List<?>) data.get("scopes");
+                                log.info("Nylas Grant scopes returned: {}", scopes);
                                 boolean hasRead = false;
                                 boolean hasSend = false;
                                 for (Object s : scopes) {
-                                    String scopeStr = String.valueOf(s);
-                                    if (scopeStr.contains("gmail.readonly")) {
+                                    String scopeStr = String.valueOf(s).toLowerCase();
+                                    if (scopeStr.contains("gmail.readonly") || scopeStr.contains("email.read_only") || scopeStr.contains("gmail.modify") || scopeStr.contains("email.modify")) {
                                         hasRead = true;
                                     }
-                                    if (scopeStr.contains("gmail.send")) {
+                                    if (scopeStr.contains("gmail.send") || scopeStr.contains("email.send") || scopeStr.contains("gmail.modify") || scopeStr.contains("email.modify")) {
                                         hasSend = true;
                                     }
                                 }
