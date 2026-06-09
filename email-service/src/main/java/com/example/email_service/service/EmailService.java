@@ -820,6 +820,22 @@ public class EmailService {
                 }
             }
 
+            if (request.getSendAt() != null) {
+                bodyMap.put("send_at", request.getSendAt());
+            }
+
+            if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
+                List<Map<String, Object>> nylasAttachments = new java.util.ArrayList<>();
+                for (com.example.email_service.dto.EmailEventDto.AttachmentDto att : request.getAttachments()) {
+                    Map<String, Object> attMap = new java.util.HashMap<>();
+                    attMap.put("content", att.getContent());
+                    attMap.put("content_type", att.getContentType());
+                    attMap.put("filename", att.getFilename());
+                    nylasAttachments.add(attMap);
+                }
+                bodyMap.put("attachments", nylasAttachments);
+            }
+
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(bodyMap, headers);
             String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages/send";
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
@@ -832,10 +848,22 @@ public class EmailService {
                 if (dataMap != null) {
                     threadId = (String) dataMap.get("thread_id");
                     messageId = (String) dataMap.get("id");
+                    if (messageId == null) {
+                        messageId = (String) dataMap.get("schedule_id");
+                    }
                 }
 
                 String plainBody = request.getBody() != null ? request.getBody().replaceAll("<[^>]*>", "") : "";
                 String snippet = plainBody.length() > 100 ? plainBody.substring(0, 100) : plainBody;
+
+                LocalDateTime scheduledTime = null;
+                if (request.getSendAt() != null) {
+                    scheduledTime = LocalDateTime.ofInstant(
+                            Instant.ofEpochSecond(request.getSendAt()),
+                            ZoneId.systemDefault());
+                }
+
+                boolean hasAttachments = request.getAttachments() != null && !request.getAttachments().isEmpty();
 
                 // Lưu vào database với nhãn SENT
                 Email email = Email.builder()
@@ -850,13 +878,38 @@ public class EmailService {
                         .label(Email.EmailLabel.SENT)
                         .category(Email.EmailCategory.SENT)
                         .snippet(snippet)
-                        .hasAttachments(false)
+                        .hasAttachments(hasAttachments)
                         .receivedAt(LocalDateTime.now())
+                        .scheduledSendAt(scheduledTime)
                         .toAddress(request.getTo())
                         .toName(request.getTo())
                         .build();
 
-                return emailRepository.save(email);
+                Email savedEmail = emailRepository.save(email);
+
+                // Save attachments and upload to Cloudinary
+                if (hasAttachments) {
+                    for (com.example.email_service.dto.EmailEventDto.AttachmentDto att : request.getAttachments()) {
+                        try {
+                            byte[] contentBytes = java.util.Base64.getDecoder().decode(att.getContent());
+                            String fileKey = "attachments/" + savedEmail.getId() + "/sent_" + System.currentTimeMillis() + "_" + att.getFilename();
+                            String r2Url = cloudinaryService.uploadFile(fileKey, contentBytes);
+
+                            Attachment attachment = Attachment.builder()
+                                    .filename(att.getFilename())
+                                    .contentType(att.getContentType())
+                                    .size((long) contentBytes.length)
+                                    .r2Url(r2Url)
+                                    .email(savedEmail)
+                                    .build();
+                            attachmentRepository.save(attachment);
+                        } catch (Exception ex) {
+                            log.error("Failed to upload outgoing attachment to Cloudinary: {}", ex.getMessage());
+                        }
+                    }
+                }
+
+                return savedEmail;
             } else {
                 throw new RuntimeException("Nylas API returned error status: " + response.getStatusCode());
             }
@@ -903,8 +956,9 @@ public class EmailService {
     @jakarta.transaction.Transactional
     public void initDatabase() {
         try {
-            log.info("Running manual database migration to add is_starred column if missing...");
+            log.info("Running manual database migration to add is_starred and scheduled_send_at columns if missing...");
             entityManager.createNativeQuery("ALTER TABLE emails ADD COLUMN IF NOT EXISTS is_starred BOOLEAN DEFAULT FALSE").executeUpdate();
+            entityManager.createNativeQuery("ALTER TABLE emails ADD COLUMN IF NOT EXISTS scheduled_send_at TIMESTAMP").executeUpdate();
             log.info("Database migration completed successfully!");
         } catch (Exception e) {
             log.warn("Manual database migration warning: {}", e.getMessage());

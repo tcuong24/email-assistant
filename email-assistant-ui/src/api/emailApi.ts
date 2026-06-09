@@ -65,11 +65,19 @@ export const updateReadStatus = (id: number | string, isRead: boolean) => api.pa
 export const bulkUpdateEmails = (data: { emailIds: (number | string)[], label?: string, category?: string, isRead?: boolean, isStarred?: boolean }) => api.patch<void>('/emails/bulk', data)
 export const bulkDeleteEmails = (emailIds: (number | string)[]) => api.delete<void>('/emails/bulk', { data: { emailIds } })
 
+export type AttachmentPayload = {
+    content: string // Base64 string
+    contentType: string
+    filename: string
+}
+
 export type SendEmailPayload = {
     to: string
     subject: string
     body: string
     replyToMessageId?: string
+    attachments?: AttachmentPayload[]
+    sendAt?: number // Unix epoch timestamp in seconds
 }
 
 export const sendEmail       = (data: SendEmailPayload) => api.post<Email>('/emails/send', data)

@@ -87,6 +87,8 @@ public class Email {
 
     @Builder.Default
     private boolean isStarred = false;
+
+    private LocalDateTime scheduledSendAt;
     
     @Column(columnDefinition = "TEXT")
     private String actionItems;

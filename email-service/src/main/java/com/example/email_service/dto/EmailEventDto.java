@@ -92,10 +92,21 @@ public class EmailEventDto {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class AttachmentDto {
+        private String content;
+        private String contentType;
+        private String filename;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class SendEmailRequest {
         private String to;
         private String subject;
         private String body;
         private String replyToMessageId; // optional
+        private List<AttachmentDto> attachments; // optional
+        private Long sendAt; // optional (Unix epoch timestamp in seconds)
     }
 }
