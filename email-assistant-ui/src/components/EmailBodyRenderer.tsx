@@ -37,13 +37,51 @@ export default function EmailBodyRenderer({ body = "", attachments = [] }: Email
       let processedBody = body;
       if (attachments && attachments.length > 0) {
         const cidRegex = /src="cid:([^"]+)"/gi;
-        processedBody = processedBody.replace(cidRegex, (match, cidValue) => {
-          // Tìm file đính kèm khớp với tên file nằm trong cid
-          const matchedAttachment = attachments.find(att => {
+        const matches = [...body.matchAll(cidRegex)];
+
+        const cidToAttachmentMap = new Map<string, any>();
+        const usedAttachmentIds = new Set<any>();
+        // Lần 1: Tìm kiếm khớp chính xác hoặc khớp theo tên file chứa trong cid
+        matches.forEach(match => {
+          const cidValue = match[1];
+          const cidLower = cidValue.toLowerCase();
+
+          const found = attachments.find(att => {
+            if (usedAttachmentIds.has(att.id)) return false;
             const filename = att.filename.toLowerCase();
-            const cid = cidValue.toLowerCase();
-            return cid === filename || cid.includes(filename) || filename.includes(cid);
+            return cidLower === filename || cidLower.includes(filename) || filename.includes(cidLower);
           });
+
+          if (found) {
+            cidToAttachmentMap.set(cidValue, found);
+            usedAttachmentIds.add(found.id);
+          }
+        });
+        // Lần 2: Nếu chưa khớp, đối chiếu theo đuôi mở rộng (extension) như png, jpg
+        matches.forEach(match => {
+          const cidValue = match[1];
+          if (cidToAttachmentMap.has(cidValue)) return;
+
+          const cidLower = cidValue.toLowerCase();
+          const beforeAt = cidLower.split('@')[0];
+          const ext = beforeAt.split('.').pop() || '';
+
+          if (ext && ext.length <= 4) { // Chỉ lấy phần mở rộng hợp lệ như png, jpg, gif
+            const found = attachments.find(att => {
+              if (usedAttachmentIds.has(att.id)) return false;
+              const filename = att.filename.toLowerCase();
+              return filename.endsWith(ext) || filename.includes('.' + ext);
+            });
+
+            if (found) {
+              cidToAttachmentMap.set(cidValue, found);
+              usedAttachmentIds.add(found.id);
+            }
+          }
+        });
+        // Lần 3: Thực hiện thay thế link cid thành URL proxy
+        processedBody = processedBody.replace(cidRegex, (match, cidValue) => {
+          const matchedAttachment = cidToAttachmentMap.get(cidValue);
           if (matchedAttachment && matchedAttachment.id) {
             const token = localStorage.getItem("accessToken") || "";
             const proxyUrl = `/api/v1/emails/attachments/${matchedAttachment.id}/download?token=${token}`;
@@ -64,7 +102,7 @@ export default function EmailBodyRenderer({ body = "", attachments = [] }: Email
         iframe.removeEventListener("load", handleLoad);
       };
     }
-  }, [body,attachments]);
+  }, [body, attachments]);
 
   if (!body) {
     return <p className="text-gray-400 italic text-sm">Thư không có nội dung.</p>;
