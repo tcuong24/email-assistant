@@ -54,7 +54,6 @@ public class EmailService {
     private final TaskRepository taskRepository;
     private final jakarta.persistence.EntityManager entityManager;
 
-
     private final RestTemplate restTemplate = new RestTemplate();
 
     private final java.util.Set<Long> activeSyncUsers = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -81,7 +80,8 @@ public class EmailService {
         return List.of();
     }
 
-    private void processNylasMessage(Map<String, Object> msg, String grantId, Long userId, Email.EmailCategory overrideCategory, Email.EmailLabel overrideLabel) {
+    private void processNylasMessage(Map<String, Object> msg, String grantId, Long userId,
+            Email.EmailCategory overrideCategory, Email.EmailLabel overrideLabel) {
         try {
             String subject = (String) msg.get("subject");
             String body = (String) msg.get("body");
@@ -148,23 +148,28 @@ public class EmailService {
         }
     }
 
-    private void syncFolderEmails(String grantId, Long userId, String folderId, int maxPages, Email.EmailCategory category, String nylasApiKey, String nylasApiUrl, org.springframework.http.HttpHeaders headers) {
-        if (folderId == null || folderId.isEmpty()) return;
+    private void syncFolderEmails(String grantId, Long userId, String folderId, int maxPages,
+            Email.EmailCategory category, String nylasApiKey, String nylasApiUrl,
+            org.springframework.http.HttpHeaders headers) {
+        if (folderId == null || folderId.isEmpty())
+            return;
 
         Long receivedAfter = null;
-        Page<Email> newestPage = emailRepository.findByUserIdAndCategoryOrderByReceivedAtDesc(userId, category, PageRequest.of(0, 1));
+        Page<Email> newestPage = emailRepository.findByUserIdAndCategoryOrderByReceivedAtDesc(userId, category,
+                PageRequest.of(0, 1));
         if (newestPage.hasContent()) {
             LocalDateTime newestTime = newestPage.getContent().get(0).getReceivedAt();
             if (newestTime != null) {
                 receivedAfter = newestTime.atZone(ZoneId.systemDefault()).toEpochSecond();
-                log.info("Thư mục {} (Danh mục {}): Tìm thấy email mới nhất ngày {}. Chỉ đồng bộ email sau mốc này.", folderId, category, newestTime);
+                log.info("Thư mục {} (Danh mục {}): Tìm thấy email mới nhất ngày {}. Chỉ đồng bộ email sau mốc này.",
+                        folderId, category, newestTime);
             }
         }
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
         String nextCursor = null;
         int pagesSynced = 0;
-        
+
         do {
             String url = nylasApiUrl + "/v3/grants/" + grantId + "/messages?limit=50&in=" + folderId;
             if (receivedAfter != null) {
@@ -173,17 +178,20 @@ public class EmailService {
             if (nextCursor != null && !nextCursor.isEmpty()) {
                 url += "&page_token=" + nextCursor;
             }
-            
+
             try {
                 ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
                 if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                     List<Map<String, Object>> messages = (List<Map<String, Object>>) response.getBody().get("data");
                     nextCursor = (String) response.getBody().get("next_cursor");
-                    
+
                     if (messages != null && !messages.isEmpty()) {
-                        log.info("Thư mục {}: Đồng bộ trang {} ({} email) cho userId {}", folderId, pagesSynced + 1, messages.size(), userId);
+                        log.info("Thư mục {}: Đồng bộ trang {} ({} email) cho userId {}", folderId, pagesSynced + 1,
+                                messages.size(), userId);
                         for (Map<String, Object> msg : messages) {
-                            Email.EmailLabel overrideLabel = (category == Email.EmailCategory.SENT) ? Email.EmailLabel.SENT : null;
+                            Email.EmailLabel overrideLabel = (category == Email.EmailCategory.SENT)
+                                    ? Email.EmailLabel.SENT
+                                    : null;
                             processNylasMessage(msg, grantId, userId, category, overrideLabel);
                         }
                     } else {
@@ -204,7 +212,8 @@ public class EmailService {
     @Async
     public void syncHistoricalEmails(String grantId, Long userId, String nylasApiKey, String nylasApiUrl) {
         if (!activeSyncUsers.add(userId)) {
-            log.warn("Tiến trình đồng bộ chọn lọc (Selective Sync) đang chạy cho userId {}. Bỏ qua yêu cầu mới.", userId);
+            log.warn("Tiến trình đồng bộ chọn lọc (Selective Sync) đang chạy cho userId {}. Bỏ qua yêu cầu mới.",
+                    userId);
             return;
         }
         try {
@@ -248,54 +257,62 @@ public class EmailService {
             log.info("Bắt đầu tiến trình đồng bộ chọn lọc (Selective Sync) cho userId {}", userId);
 
             // Bước 2: Đồng bộ chọn lọc theo từng nhãn với độ sâu khác nhau
-            
+
             // 1. Thư chính (Sâu: tối đa 10 trang = 500 thư)
             String primaryTarget = (personalFolderId != null) ? personalFolderId : inboxFolderId;
             log.info("Đồng bộ thư chính (Primary) sâu cho userId {}", userId);
-            syncFolderEmails(grantId, userId, primaryTarget, 10, Email.EmailCategory.PRIMARY, nylasApiKey, nylasApiUrl, headers);
+            syncFolderEmails(grantId, userId, primaryTarget, 10, Email.EmailCategory.PRIMARY, nylasApiKey, nylasApiUrl,
+                    headers);
 
             // 2. Thư quảng cáo (Nông: tối đa 1 trang = 50 thư)
             if (promotionsFolderId != null) {
                 log.info("Đồng bộ thư Quảng cáo (Promotions) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, promotionsFolderId, 1, Email.EmailCategory.PROMOTIONS, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, promotionsFolderId, 1, Email.EmailCategory.PROMOTIONS, nylasApiKey,
+                        nylasApiUrl, headers);
             }
 
             // 3. Thư cập nhật (Nông: tối đa 1 trang = 50 thư)
             if (updatesFolderId != null) {
                 log.info("Đồng bộ thư Cập nhật (Updates) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, updatesFolderId, 1, Email.EmailCategory.UPDATES, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, updatesFolderId, 1, Email.EmailCategory.UPDATES, nylasApiKey,
+                        nylasApiUrl, headers);
             }
 
             // 4. Thư mạng xã hội (Nông: tối đa 1 trang = 50 thư)
             if (socialFolderId != null) {
                 log.info("Đồng bộ thư Mạng xã hội (Social) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, socialFolderId, 1, Email.EmailCategory.SOCIAL, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, socialFolderId, 1, Email.EmailCategory.SOCIAL, nylasApiKey,
+                        nylasApiUrl, headers);
             }
 
             // 5. Thư diễn đàn (Nông: tối đa 1 trang = 50 thư)
             if (forumsFolderId != null) {
                 log.info("Đồng bộ thư Diễn đàn (Forums) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, forumsFolderId, 1, Email.EmailCategory.FORUMS, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, forumsFolderId, 1, Email.EmailCategory.FORUMS, nylasApiKey,
+                        nylasApiUrl, headers);
             }
 
             // 6. Thư đã gửi (Sâu: tối đa 5 trang = 250 thư)
             if (sentFolderId != null) {
                 log.info("Đồng bộ thư đã gửi (Sent) sâu cho userId {}", userId);
-                syncFolderEmails(grantId, userId, sentFolderId, 5, Email.EmailCategory.SENT, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, sentFolderId, 5, Email.EmailCategory.SENT, nylasApiKey, nylasApiUrl,
+                        headers);
             }
 
             // 7. Thư rác (Spam) (Nông: tối đa 1 trang = 50 thư)
             if (spamFolderId != null) {
                 log.info("Đồng bộ thư rác (Spam) nông cho userId {}", userId);
-                syncFolderEmails(grantId, userId, spamFolderId, 1, Email.EmailCategory.SPAM, nylasApiKey, nylasApiUrl, headers);
+                syncFolderEmails(grantId, userId, spamFolderId, 1, Email.EmailCategory.SPAM, nylasApiKey, nylasApiUrl,
+                        headers);
             }
 
             log.info("Hoàn tất tiến trình đồng bộ chọn lọc cho userId {}", userId);
-            
+
             // Tự động quét và phân tích các email PENDING còn sót lại
             List<Email> pendingEmails = emailRepository.findByUserIdAndLabel(userId, Email.EmailLabel.PENDING);
             if (!pendingEmails.isEmpty()) {
-                log.info("Tìm thấy {} email đang ở trạng thái PENDING. Bắt đầu gửi yêu cầu phân tích ngầm...", pendingEmails.size());
+                log.info("Tìm thấy {} email đang ở trạng thái PENDING. Bắt đầu gửi yêu cầu phân tích ngầm...",
+                        pendingEmails.size());
                 for (Email pending : pendingEmails) {
                     try {
                         this.triggerAiAnalysis(pending.getId(), userId);
@@ -357,7 +374,8 @@ public class EmailService {
                 .messageId(request.getMessageId())
                 .isRead(request.isRead())
                 .label(overrideLabel != null ? overrideLabel : Email.EmailLabel.PENDING)
-                .category(request.getCategory() != null ? Email.EmailCategory.valueOf(request.getCategory()) : Email.EmailCategory.PRIMARY)
+                .category(request.getCategory() != null ? Email.EmailCategory.valueOf(request.getCategory())
+                        : Email.EmailCategory.PRIMARY)
                 .snippet(request.getSnippet())
                 .hasAttachments(request.isHasAttachments())
                 .receivedAt(request.getReceivedAt() != null ? request.getReceivedAt() : LocalDateTime.now())
@@ -370,7 +388,8 @@ public class EmailService {
         log.info("Email {} nhận thành công", savedEmail.getId());
 
         if (savedEmail.getLabel() == Email.EmailLabel.PENDING) {
-            if (savedEmail.getCategory() == Email.EmailCategory.PRIMARY || savedEmail.getCategory() == Email.EmailCategory.UPDATES) {
+            if (savedEmail.getCategory() == Email.EmailCategory.PRIMARY
+                    || savedEmail.getCategory() == Email.EmailCategory.UPDATES) {
                 // Tự động kích hoạt phân tích AI ngầm sau khi commit transaction
                 if (TransactionSynchronizationManager.isActualTransactionActive()) {
                     TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -383,7 +402,8 @@ public class EmailService {
                     triggerAiAnalysis(savedEmail.getId(), userId);
                 }
             } else {
-                // Không phải PRIMARY/UPDATES -> Tự động đánh dấu nhãn tương ứng và không gửi sang AI
+                // Không phải PRIMARY/UPDATES -> Tự động đánh dấu nhãn tương ứng và không gửi
+                // sang AI
                 if (savedEmail.getCategory() == Email.EmailCategory.SPAM) {
                     savedEmail.setLabel(Email.EmailLabel.SPAM);
                     savedEmail.setSummary("Thư rác từ Gmail.");
@@ -395,7 +415,8 @@ public class EmailService {
             }
         }
 
-        // Gửi thông báo WebSocket ngay lập tức (sau khi commit transaction để tránh tranh chấp dữ liệu)
+        // Gửi thông báo WebSocket ngay lập tức (sau khi commit transaction để tránh
+        // tranh chấp dữ liệu)
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
@@ -430,7 +451,8 @@ public class EmailService {
     @Transactional
     public void updateAiResult(AiResultEvent event) {
         emailRepository.findById(event.getEmailId()).ifPresent(email -> {
-            // Lập trình phòng thủ: Bọc trong try-catch để tránh crash luồng Kafka khi nhận nhãn lạ
+            // Lập trình phòng thủ: Bọc trong try-catch để tránh crash luồng Kafka khi nhận
+            // nhãn lạ
             try {
                 email.setLabel(Email.EmailLabel.valueOf(event.getLabel().toUpperCase().strip()));
             } catch (IllegalArgumentException e) {
@@ -446,7 +468,8 @@ public class EmailService {
             log.info("Email {} cập nhật AI result: {}",
                     email.getId(), email.getLabel());
 
-            // Tách các ActionItem và lưu vào bảng tasks nếu shouldCreateTask là true - ĐÃ BỎ THEO YÊU CẦU ĐỂ TẠO THỦ CÔNG TỪ UI
+            // Tách các ActionItem và lưu vào bảng tasks nếu shouldCreateTask là true - ĐÃ
+            // BỎ THEO YÊU CẦU ĐỂ TẠO THỦ CÔNG TỪ UI
             log.info("Bỏ qua tự động tạo task cho emailId={} để người dùng tự bấm tạo trên giao diện.", email.getId());
 
             // Push notification qua WebSocket
@@ -536,7 +559,8 @@ public class EmailService {
     }
 
     @Transactional
-    public void bulkUpdate(List<Long> emailIds, String label, String category, Boolean isRead, Boolean isStarred, Long userId) {
+    public void bulkUpdate(List<Long> emailIds, String label, String category, Boolean isRead, Boolean isStarred,
+            Long userId) {
         if (emailIds == null || emailIds.isEmpty()) {
             return;
         }
@@ -575,7 +599,8 @@ public class EmailService {
 
             // Đồng bộ trạng thái đọc và dấu sao lên Nylas
             String grantId = findGrantIdByUserId(userId);
-            if (grantId != null && !grantId.isEmpty() && email.getMessageId() != null && !email.getMessageId().isEmpty()) {
+            if (grantId != null && !grantId.isEmpty() && email.getMessageId() != null
+                    && !email.getMessageId().isEmpty()) {
                 if (isRead != null) {
                     updateNylasMessageReadStatus(grantId, email.getMessageId(), isRead);
                 }
@@ -648,19 +673,24 @@ public class EmailService {
                 .filter(e -> e.getUserId().equals(userId))
                 .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
 
-        if (email.getLabel() == Email.EmailLabel.PENDING && (email.getSummary() == null || email.getSummary().isEmpty())) {
+        if (email.getLabel() == Email.EmailLabel.PENDING
+                && (email.getSummary() == null || email.getSummary().isEmpty())) {
             // Lấy ngữ cảnh hội thoại (threadContext) từ các email cũ trong cùng luồng
             String threadContext = "";
             if (email.getThreadId() != null && !email.getThreadId().isEmpty()) {
-                List<Email> threadEmails = emailRepository.findByThreadIdAndUserIdOrderByReceivedAtAsc(email.getThreadId(), userId);
+                List<Email> threadEmails = emailRepository
+                        .findByThreadIdAndUserIdOrderByReceivedAtAsc(email.getThreadId(), userId);
                 StringBuilder contextBuilder = new StringBuilder();
                 for (Email oldEmail : threadEmails) {
                     if (oldEmail.getId().equals(email.getId())) {
                         break; // Chỉ lấy các email nhận trước email hiện tại
                     }
-                    contextBuilder.append("From: ").append(oldEmail.getFromName() != null ? oldEmail.getFromName() : oldEmail.getFromAddress()).append("\n");
+                    contextBuilder.append("From: ")
+                            .append(oldEmail.getFromName() != null ? oldEmail.getFromName() : oldEmail.getFromAddress())
+                            .append("\n");
                     contextBuilder.append("Subject: ").append(oldEmail.getSubject()).append("\n");
-                    contextBuilder.append("Snippet: ").append(oldEmail.getSnippet() != null ? oldEmail.getSnippet() : "").append("\n");
+                    contextBuilder.append("Snippet: ")
+                            .append(oldEmail.getSnippet() != null ? oldEmail.getSnippet() : "").append("\n");
                     contextBuilder.append("---\n");
                 }
                 threadContext = contextBuilder.toString();
@@ -683,18 +713,25 @@ public class EmailService {
                     .build();
 
             kafkaTemplate.send(emailReceivedTopic, String.valueOf(email.getId()), event);
-            log.info("Yêu cầu phân tích AI cho Email {} đã được gửi lên Kafka với threadContext (length={})", email.getId(), threadContext.length());
+            log.info("Yêu cầu phân tích AI cho Email {} đã được gửi lên Kafka với threadContext (length={})",
+                    email.getId(), threadContext.length());
         }
         return email;
     }
 
     public Email.EmailCategory extractCategory(List<String> folders) {
-        if (folders == null) return Email.EmailCategory.PRIMARY;
-        if (folders.contains("SPAM") || folders.contains("spam")) return Email.EmailCategory.SPAM;
-        if (folders.contains("CATEGORY_PROMOTIONS")) return Email.EmailCategory.PROMOTIONS;
-        if (folders.contains("CATEGORY_SOCIAL"))     return Email.EmailCategory.SOCIAL;
-        if (folders.contains("CATEGORY_UPDATES"))    return Email.EmailCategory.UPDATES;
-        if (folders.contains("CATEGORY_FORUMS"))     return Email.EmailCategory.FORUMS;
+        if (folders == null)
+            return Email.EmailCategory.PRIMARY;
+        if (folders.contains("SPAM") || folders.contains("spam"))
+            return Email.EmailCategory.SPAM;
+        if (folders.contains("CATEGORY_PROMOTIONS"))
+            return Email.EmailCategory.PROMOTIONS;
+        if (folders.contains("CATEGORY_SOCIAL"))
+            return Email.EmailCategory.SOCIAL;
+        if (folders.contains("CATEGORY_UPDATES"))
+            return Email.EmailCategory.UPDATES;
+        if (folders.contains("CATEGORY_FORUMS"))
+            return Email.EmailCategory.FORUMS;
         return Email.EmailCategory.PRIMARY;
     }
 
@@ -725,9 +762,11 @@ public class EmailService {
                 String contentType = (String) att.get("content_type");
                 Long size = att.get("size") != null ? ((Number) att.get("size")).longValue() : 0L;
 
-                if (fileId == null || fileId.isEmpty()) continue;
+                if (fileId == null || fileId.isEmpty())
+                    continue;
 
-                // Skip downloading very large attachments to prevent OutOfMemoryError in 512MB RAM environment
+                // Skip downloading very large attachments to prevent OutOfMemoryError in 512MB
+                // RAM environment
                 if (size > 5 * 1024 * 1024) { // 5MB limit
                     log.warn("Attachment {} is too large ({} bytes). Skipping download.", filename, size);
                     Attachment attachment = Attachment.builder()
@@ -749,7 +788,8 @@ public class EmailService {
                 }
 
                 // 2. Upload to Cloudinary
-                String fileKey = "attachments/" + email.getId() + "/" + fileId + "_" + (filename != null ? filename : "unnamed");
+                String fileKey = "attachments/" + email.getId() + "/" + fileId + "_"
+                        + (filename != null ? filename : "unnamed");
                 String r2Url = cloudinaryService.uploadFile(fileKey, content);
 
                 // 3. Save attachment metadata in DB
@@ -777,12 +817,14 @@ public class EmailService {
             if (messageId != null && !messageId.isEmpty()) {
                 url += "?message_id=" + messageId;
             }
-            ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
+            java.net.URI uri = java.net.URI.create(url);
+            ResponseEntity<byte[]> response = restTemplate.exchange(uri, HttpMethod.GET, entity, byte[].class);
             if (response.getStatusCode() == HttpStatus.OK) {
                 return response.getBody();
             }
         } catch (Exception e) {
-            log.error("Failed to download Nylas file grantId={}, fileId={}, messageId={}, error={}", grantId, fileId, messageId, e.getMessage());
+            log.error("Failed to download Nylas file grantId={}, fileId={}, messageId={}, error={}", grantId, fileId,
+                    messageId, e.getMessage());
         }
         return null;
     }
@@ -892,7 +934,8 @@ public class EmailService {
                     for (com.example.email_service.dto.EmailEventDto.AttachmentDto att : request.getAttachments()) {
                         try {
                             byte[] contentBytes = java.util.Base64.getDecoder().decode(att.getContent());
-                            String fileKey = "attachments/" + savedEmail.getId() + "/sent_" + System.currentTimeMillis() + "_" + att.getFilename();
+                            String fileKey = "attachments/" + savedEmail.getId() + "/sent_" + System.currentTimeMillis()
+                                    + "_" + att.getFilename();
                             String r2Url = cloudinaryService.uploadFile(fileKey, contentBytes);
 
                             Attachment attachment = Attachment.builder()
@@ -945,11 +988,52 @@ public class EmailService {
         long important = emailRepository.countByUserIdAndLabel(userId, Email.EmailLabel.IMPORTANT);
         long spam = emailRepository.countByUserIdAndLabel(userId, Email.EmailLabel.SPAM);
         return Map.of(
-            "total", total,
-            "unread", unread,
-            "important", important,
-            "spam", spam
-        );
+                "total", total,
+                "unread", unread,
+                "important", important,
+                "spam", spam);
+    }
+
+    public Attachment getAttachmentById(Long attachmentId, Long userId) {
+        Attachment attachment = attachmentRepository.findById(attachmentId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy attachment"));
+        if (!attachment.getEmail().getUserId().equals(userId)) {
+            throw new RuntimeException("Không có quyền truy cập");
+        }
+        return attachment;
+    }
+
+    public byte[] downloadAttachmentFromNylas(Long attachmentId, Long userId) {
+        Attachment attachment = getAttachmentById(attachmentId, userId);
+        Email email = attachment.getEmail();
+
+        String grantId = findGrantIdByUserId(userId);
+        if (grantId == null || grantId.isEmpty()) {
+            throw new RuntimeException("Tài khoản chưa kết nối Nylas");
+        }
+
+        String r2Url = attachment.getR2Url();
+        String emailIdStr = String.valueOf(email.getId());
+        String folderToken = "attachments/" + emailIdStr + "/";
+        int idx = r2Url.indexOf(folderToken);
+        if (idx == -1) {
+            throw new RuntimeException("Định dạng URL của attachment không hợp lệ");
+        }
+
+        String part = r2Url.substring(idx + folderToken.length());
+        int lastUnderscore = part.lastIndexOf("_" + attachment.getFilename());
+        if (lastUnderscore == -1) {
+            throw new RuntimeException("Không thể phân tích file ID từ URL");
+        }
+
+        String fileId = part.substring(0, lastUnderscore);
+        log.info("Downloading attachment from Nylas: fileId={}, filename={}", fileId, attachment.getFilename());
+
+        byte[] content = downloadNylasFile(grantId, fileId, email.getMessageId());
+        if (content == null) {
+            throw new RuntimeException("Không tải được file từ Nylas");
+        }
+        return content;
     }
 
     @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
@@ -957,8 +1041,11 @@ public class EmailService {
     public void initDatabase() {
         try {
             log.info("Running manual database migration to add is_starred and scheduled_send_at columns if missing...");
-            entityManager.createNativeQuery("ALTER TABLE emails ADD COLUMN IF NOT EXISTS is_starred BOOLEAN DEFAULT FALSE").executeUpdate();
-            entityManager.createNativeQuery("ALTER TABLE emails ADD COLUMN IF NOT EXISTS scheduled_send_at TIMESTAMP").executeUpdate();
+            entityManager
+                    .createNativeQuery("ALTER TABLE emails ADD COLUMN IF NOT EXISTS is_starred BOOLEAN DEFAULT FALSE")
+                    .executeUpdate();
+            entityManager.createNativeQuery("ALTER TABLE emails ADD COLUMN IF NOT EXISTS scheduled_send_at TIMESTAMP")
+                    .executeUpdate();
             log.info("Database migration completed successfully!");
         } catch (Exception e) {
             log.warn("Manual database migration warning: {}", e.getMessage());

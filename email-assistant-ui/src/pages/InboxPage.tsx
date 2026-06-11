@@ -528,7 +528,7 @@ export default function InboxPage() {
     setReplyMode(mode);
     setReplyBody("");
     setForwardTo("");
-    
+
     setTimeout(() => {
       const container = document.getElementById("reply-box-container");
       if (container) {
@@ -548,17 +548,17 @@ export default function InboxPage() {
     if (lastEmail) {
       const formattedDate = new Date(lastEmail.receivedAt || "").toLocaleString("vi-VN");
       const cleanBody = lastEmail.body ? lastEmail.body.replace(/<[^>]*>/g, "") : "";
-      
+
       const forwardHeader = `\n\n---------- Forwarded message ---------\n` +
         `Từ: ${lastEmail.fromName || ""} <${lastEmail.fromAddress}>\n` +
         `Ngày: ${formattedDate}\n` +
         `Chủ đề: ${lastEmail.subject}\n` +
         `Đến: ${lastEmail.toAddress || "tôi"}\n\n` +
         `${cleanBody}`;
-      
+
       setReplyBody(forwardHeader);
     }
-    
+
     setTimeout(() => {
       const container = document.getElementById("reply-box-container");
       if (container) {
@@ -582,11 +582,11 @@ export default function InboxPage() {
   const handleSendReply = async () => {
     const lastEmail = displayEmails[displayEmails.length - 1] || selectedEmail;
     if (!replyBody.trim() || !lastEmail) return;
-    
+
     const destination = replyMode === "forward" ? forwardTo : lastEmail.fromAddress;
     const subjectPrefix = replyMode === "forward" ? "Fwd:" : "Re:";
     const subject = lastEmail.subject.startsWith(subjectPrefix) ? lastEmail.subject : `${subjectPrefix} ${lastEmail.subject}`;
-    
+
     setIsSendingReply(true)
     try {
       await sendEmail({
@@ -801,8 +801,8 @@ export default function InboxPage() {
               <div className="flex items-center gap-1">
                 {/* Bulk checkbox */}
                 <div className="flex items-center" style={{ padding: "6px 8px" }}>
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={threadedEmails.length > 0 && checkedEmailIds.size === threadedEmails.length}
                     ref={el => {
                       if (el) {
@@ -810,12 +810,12 @@ export default function InboxPage() {
                       }
                     }}
                     onChange={() => handleCheckAll(threadedEmails)}
-                    className="w-[18px] h-[18px] rounded cursor-pointer accent-[var(--accent-primary)]" 
-                    onClick={(e) => e.stopPropagation()} 
+                    className="w-[18px] h-[18px] rounded cursor-pointer accent-[var(--accent-primary)]"
+                    onClick={(e) => e.stopPropagation()}
                   />
                 </div>
 
-                 {checkedEmailIds.size > 0 ? (
+                {checkedEmailIds.size > 0 ? (
                   /* ── Bulk Actions Menu (shown when one or more emails are checked) ── */
                   <div className="flex items-center gap-1">
                     {activeCategory === "deleted" ? (
@@ -864,9 +864,9 @@ export default function InboxPage() {
                         </button>
                       </>
                     )}
-                    
+
                     <div style={{ width: 1, height: 20, background: "var(--border-color)", margin: "0 4px" }} />
-                    
+
                     <button
                       onClick={() => handleBulkAction('important')}
                       className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer"
@@ -966,12 +966,12 @@ export default function InboxPage() {
 
         {/* ── Category Tabs (Gmail-style) ── */}
         {activeCategory === "inbox" && (
-          <div 
-            className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-shrink-0" 
-            style={{ 
-              padding: "8px 16px", 
+          <div
+            className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-shrink-0"
+            style={{
+              padding: "8px 16px",
               borderBottom: "1px solid var(--border)",
-              background: "var(--bg-panel)" 
+              background: "var(--bg-panel)"
             }}
           >
             {CATEGORY_TABS.map(tab => {
@@ -1000,7 +1000,7 @@ export default function InboxPage() {
         {/* ── Email List — Scrollable ── */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {activeCategory === "deleted" && (
-            <div 
+            <div
               className="flex items-center gap-3 p-3.5 mx-4 mt-4 text-xs rounded-xl animate-fade-in"
               style={{
                 background: "rgba(99, 102, 241, 0.08)",
@@ -1351,7 +1351,7 @@ export default function InboxPage() {
 
                           {/* Body */}
                           <div className="text-sm text-gray-800 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-                            <EmailBodyRenderer body={emailItem.body} />
+                            <EmailBodyRenderer body={emailItem.body} attachments={emailItem.attachments} />
                           </div>
 
                           {/* Attachments */}
@@ -1414,7 +1414,7 @@ export default function InboxPage() {
                         Me
                       </div>
                       <span className="text-xs font-semibold text-gray-700">
-                        {replyMode === "forward" ? "Chuyển tiếp thư" : replyMode === "reply_all" ? "Trả lời tất cả:" : "Trả lời cho:"} 
+                        {replyMode === "forward" ? "Chuyển tiếp thư" : replyMode === "reply_all" ? "Trả lời tất cả:" : "Trả lời cho:"}
                         {replyMode !== "forward" && ` ${displayEmails[displayEmails.length - 1]?.fromAddress || selectedEmail.fromAddress}`}
                       </span>
                     </div>

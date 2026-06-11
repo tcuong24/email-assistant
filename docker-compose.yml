@@ -60,7 +60,7 @@ services:
       - DB_HOST=postgres
       - DB_USER=postgres
       - DB_PASS=postgres
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/user_db
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/email_db
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
     depends_on:
@@ -83,7 +83,7 @@ services:
       - DB_HOST=postgres
       - DB_USER=postgres
       - DB_PASS=postgres
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/analytics_db
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/email_db
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     depends_on:
       postgres:
@@ -108,6 +108,9 @@ services:
       - DB_PASS=postgres
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/email_db
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - NYLAS_CLIENT_ID=${NYLAS_CLIENT_ID}
+      - NYLAS_API_KEY=${NYLAS_API_KEY}
+      - NYLAS_API_URL=${NYLAS_API_URL}
     depends_on:
       postgres:
         condition: service_healthy

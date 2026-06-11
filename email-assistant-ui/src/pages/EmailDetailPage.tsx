@@ -169,7 +169,7 @@ export default function EmailDetailPage() {
     setReplyMode(mode);
     setReplyBody("");
     setForwardTo("");
-    
+
     setTimeout(() => {
       const container = document.getElementById("reply-box-container");
       if (container) {
@@ -189,17 +189,17 @@ export default function EmailDetailPage() {
     if (lastEmail) {
       const formattedDate = new Date(lastEmail.receivedAt || "").toLocaleString("vi-VN");
       const cleanBody = lastEmail.body ? lastEmail.body.replace(/<[^>]*>/g, "") : "";
-      
+
       const forwardHeader = `\n\n---------- Forwarded message ---------\n` +
         `Từ: ${lastEmail.fromName || ""} <${lastEmail.fromAddress}>\n` +
         `Ngày: ${formattedDate}\n` +
         `Chủ đề: ${lastEmail.subject}\n` +
         `Đến: ${lastEmail.toAddress || "tôi"}\n\n` +
         `${cleanBody}`;
-      
+
       setReplyBody(forwardHeader);
     }
-    
+
     setTimeout(() => {
       const container = document.getElementById("reply-box-container");
       if (container) {
@@ -223,11 +223,11 @@ export default function EmailDetailPage() {
   const handleSendReply = async () => {
     const lastEmail = displayEmails[displayEmails.length - 1] || email;
     if (!replyBody.trim() || !lastEmail) return;
-    
+
     const destination = replyMode === "forward" ? forwardTo : lastEmail.fromAddress;
     const subjectPrefix = replyMode === "forward" ? "Fwd:" : "Re:";
     const subject = lastEmail.subject.startsWith(subjectPrefix) ? lastEmail.subject : `${subjectPrefix} ${lastEmail.subject}`;
-    
+
     setIsSendingReply(true)
     try {
       await sendEmail({
@@ -333,7 +333,7 @@ export default function EmailDetailPage() {
 
             <div className="mx-1" style={{ width: 1, height: 16, background: "var(--border-color)" }} />
 
-             {email?.category === "DELETED" ? (
+            {email?.category === "DELETED" ? (
               <>
                 <button
                   onClick={() => handleSingleAction('restore')}
@@ -571,7 +571,7 @@ export default function EmailDetailPage() {
 
                         {/* Body */}
                         <div className="text-sm text-gray-800 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-                          <EmailBodyRenderer body={emailItem.body} />
+                          <EmailBodyRenderer body={emailItem.body} attachments={emailItem.attachments} />
                         </div>
 
                         {/* Attachments */}
@@ -584,7 +584,7 @@ export default function EmailDetailPage() {
                               {emailItem.attachments.map((att, idx) => (
                                 <a
                                   key={idx}
-                                  href={att.r2Url}
+                                  href={`/api/v1/emails/attachments/${att.id}/download?token=${localStorage.getItem('accessToken') || ''}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-white hover:bg-gray-50 transition-colors no-underline text-gray-700"
@@ -635,7 +635,7 @@ export default function EmailDetailPage() {
                         Me
                       </div>
                       <span className="text-xs font-semibold text-gray-700">
-                        {replyMode === "forward" ? "Chuyển tiếp thư" : replyMode === "reply_all" ? "Trả lời tất cả:" : "Trả lời cho:"} 
+                        {replyMode === "forward" ? "Chuyển tiếp thư" : replyMode === "reply_all" ? "Trả lời tất cả:" : "Trả lời cho:"}
                         {replyMode !== "forward" && ` ${displayEmails[displayEmails.length - 1]?.fromAddress || email.fromAddress}`}
                       </span>
                     </div>

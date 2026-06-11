@@ -40,13 +40,17 @@ public class AuthFilter implements GatewayFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        // 2. Extract Authorization header
+        // 2. Extract Authorization header or query parameter
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        String token = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        } else {
+            token = request.getQueryParams().getFirst("token");
+        }
+        if (token == null || token.isEmpty()) {
             return unauthorizedResponse(exchange, "Missing token");
         }
-
-        String token = authHeader.substring(7);
 
         // 3. Validate Token
         if (!jwtService.isTokenValid(token)) {

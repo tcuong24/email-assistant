@@ -2,17 +2,20 @@ package com.example.email_service.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class CloudinaryService {
 
     private final Cloudinary cloudinary;
+
+    public CloudinaryService(Optional<Cloudinary> cloudinary) {
+        this.cloudinary = cloudinary.orElse(null);
+    }
 
     public String uploadFile(String key, byte[] content) {
         if (cloudinary == null) {

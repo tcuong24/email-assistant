@@ -144,6 +144,31 @@ public class EmailController {
         return ResponseEntity.ok(emailService.triggerAiAnalysis(id, userId));
     }
 
+    // Tải hoặc xem trước attachment trực tiếp từ Nylas
+    @GetMapping("/attachments/{attachmentId}/download")
+    public ResponseEntity<byte[]> downloadAttachment(
+            @PathVariable Long attachmentId,
+            @RequestHeader("X-User-Id") Long userId) {
+        try {
+            com.example.email_service.entity.Attachment attachment = emailService.getAttachmentById(attachmentId, userId);
+            byte[] content = emailService.downloadAttachmentFromNylas(attachmentId, userId);
+            
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.parseMediaType(
+                    attachment.getContentType() != null ? attachment.getContentType() : "application/octet-stream"));
+            headers.setContentDisposition(org.springframework.http.ContentDisposition.inline()
+                    .filename(attachment.getFilename(), java.nio.charset.StandardCharsets.UTF_8)
+                    .build());
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(content);
+        } catch (Exception e) {
+            log.error("Lỗi khi tải attachment {}: {}", attachmentId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     // Lấy trạng thái kết nối Nylas
     @GetMapping("/nylas/status")
     public ResponseEntity<Map<String, Boolean>> getNylasStatus(@RequestHeader("X-User-Id") Long userId) {

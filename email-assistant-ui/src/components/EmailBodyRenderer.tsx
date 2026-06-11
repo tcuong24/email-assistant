@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface EmailBodyRendererProps {
   body?: string;
+  attachments?: any[];
 }
 
 const checkIsHtml = (text: string) => {
@@ -15,7 +16,7 @@ const checkIsHtml = (text: string) => {
   );
 };
 
-export default function EmailBodyRenderer({ body = "" }: EmailBodyRendererProps) {
+export default function EmailBodyRenderer({ body = "", attachments = [] }: EmailBodyRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeHeight, setIframeHeight] = useState("300px");
 
@@ -33,11 +34,28 @@ export default function EmailBodyRenderer({ body = "" }: EmailBodyRendererProps)
 
       const iframe = iframeRef.current;
       iframe.addEventListener("load", handleLoad);
-      
+      let processedBody = body;
+      if (attachments && attachments.length > 0) {
+        const cidRegex = /src="cid:([^"]+)"/gi;
+        processedBody = processedBody.replace(cidRegex, (match, cidValue) => {
+          // Tìm file đính kèm khớp với tên file nằm trong cid
+          const matchedAttachment = attachments.find(att => {
+            const filename = att.filename.toLowerCase();
+            const cid = cidValue.toLowerCase();
+            return cid === filename || cid.includes(filename) || filename.includes(cid);
+          });
+          if (matchedAttachment && matchedAttachment.id) {
+            const token = localStorage.getItem("accessToken") || "";
+            const proxyUrl = `/api/v1/emails/attachments/${matchedAttachment.id}/download?token=${token}`;
+            return `src="${proxyUrl}"`;
+          }
+          return match;
+        });
+      }
       // Ghi đè mã HTML vào iframe
       if (iframe.contentDocument) {
         iframe.contentDocument.open();
-        iframe.contentDocument.write(body);
+        iframe.contentDocument.write(processedBody);
         iframe.contentDocument.close();
         handleLoad();
       }
@@ -46,7 +64,7 @@ export default function EmailBodyRenderer({ body = "" }: EmailBodyRendererProps)
         iframe.removeEventListener("load", handleLoad);
       };
     }
-  }, [body]);
+  }, [body,attachments]);
 
   if (!body) {
     return <p className="text-gray-400 italic text-sm">Thư không có nội dung.</p>;

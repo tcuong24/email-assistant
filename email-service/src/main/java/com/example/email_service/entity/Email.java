@@ -85,6 +85,7 @@ public class Email {
     @Builder.Default
     private boolean isRead = false;
 
+    @JsonProperty("isStarred")
     @Builder.Default
     private boolean isStarred = false;
 

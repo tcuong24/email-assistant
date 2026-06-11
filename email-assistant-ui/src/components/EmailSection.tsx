@@ -251,13 +251,12 @@ const EmailSection = ({
               {email.summary || email.snippet || "Thư không có nội dung."}
             </span>
           </div>
-
           {email.attachments && email.attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
               {email.attachments.map((att, idx) => (
                 <a
                   key={idx}
-                  href={att.r2Url}
+                  href={`/api/v1/emails/attachments/${att.id}/download?token=${localStorage.getItem('accessToken') || ''}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-gray-700 font-medium no-underline decoration-transparent"
