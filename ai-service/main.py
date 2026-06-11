@@ -23,7 +23,7 @@ from consumer import start_consumer
 
 app = FastAPI(title="AI Service")
 
-@app.get("/health")
+@app.get("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "UP"}
 

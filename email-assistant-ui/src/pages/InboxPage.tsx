@@ -299,7 +299,7 @@ export default function InboxPage() {
   useEffect(() => {
     const hasPending = data?.content?.some(email => email.label === 'PENDING')
     if (hasPending) {
-      setRefetchIntervalState(5000)
+      setRefetchIntervalState(20000)
     } else {
       setRefetchIntervalState(300000)
     }
