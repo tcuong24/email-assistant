@@ -13,7 +13,7 @@ spring:
 
       default-filters:
         - SetRequestHeader=User-Agent, Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/120.0.0.0 Safari/537.36
-
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
       httpclient:
         pool:
           type: disabled
