@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://cuongtran0413-gateway-service.hf.space/api/:path*"
+      "destination": "https://email-gateway-xyks.onrender.com/api/:path*"
     },
     {
       "source": "/((?!api/).*)",
