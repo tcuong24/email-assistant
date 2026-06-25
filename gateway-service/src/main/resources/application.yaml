@@ -4,10 +4,10 @@ server:
 spring:
   application:
     name: gateway-service
-  cloud:
-    data:
+  data:
     redis:
       url: ${REDIS_URL:redis://localhost:6379}
+  cloud:
     gateway:
       # Tắt discovery client nếu không dùng Eureka
       discovery:
