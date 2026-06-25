@@ -18,7 +18,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
+ # ── REDIS: Cache & Rate Limiting ───────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: email-assistant-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - email-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   # ── MESSAGE BROKER: Kafka (KRaft Mode) ──────────────────────────────
   kafka:
     image: confluentinc/cp-kafka:7.6.0
@@ -130,10 +142,12 @@ services:
     environment:
       - SERVER_PORT=8080
       - JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - user-service
       - analytics-service
       - email-service
+      - redis
     networks:
       - email-network
 
