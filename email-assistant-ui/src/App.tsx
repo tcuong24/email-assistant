@@ -11,6 +11,7 @@ import TasksPage from './pages/TasksPage'
 import LoginPage from './pages/LoginForm'
 import RegisterPage from './pages/RegisterForm'
 import OAuthCallback from './components/OAuthNylas'
+import HomePage from './pages/HomePage'
 
 const queryClient = new QueryClient()
 
@@ -21,6 +22,7 @@ export default function App() {
         <Toaster richColors position="top-right" />
         <BrowserRouter>
           <Routes>
+            <Route path="/"         element={<HomePage />} />
             <Route path="/login"    element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
@@ -36,7 +38,7 @@ export default function App() {
             <Route path="/tasks" element={
               <ProtectedRoute><TasksPage /></ProtectedRoute>
             }/>
-            <Route path="*" element={<Navigate to="/inbox" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
